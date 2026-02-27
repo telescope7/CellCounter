@@ -1,6 +1,7 @@
 package com.prolymphname.cellcounter;
 
-import org.opencv.core.Core;
+import com.prolymphname.cellcounter.application.CellCounterApplicationService;
+import com.prolymphname.cellcounter.export.ExportMetadata;
 import org.opencv.core.Point;
 import org.opencv.core.Mat;
 import org.opencv.core.Scalar;
@@ -13,12 +14,8 @@ import java.awt.event.ItemEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
 
 import org.jfree.chart.ChartPanel;
@@ -36,7 +33,7 @@ import org.jfree.chart.renderer.xy.XYBarRenderer; // For Histogram bar color wit
 public class CellCounterGUI extends JFrame {
 
 	private static final long serialVersionUID = 1L;
-	private AnalysisLogic analysisLogic;
+	private final CellCounterApplicationService appService;
 
 	private boolean videoPlaying = false;
 	private boolean paused = false;
@@ -55,7 +52,11 @@ public class CellCounterGUI extends JFrame {
 	private final Color CHART_BACKGROUND_COLOR = UIManager.getColor("Panel.background"); // Match L&F background
 
 	public CellCounterGUI() {
-		this.analysisLogic = new AnalysisLogic();
+		this(new CellCounterApplicationService());
+	}
+
+	public CellCounterGUI(CellCounterApplicationService appService) {
+		this.appService = appService;
 		initUI();
 	}
 
@@ -156,7 +157,7 @@ public class CellCounterGUI extends JFrame {
 		playbackRateSpinner.addChangeListener(e -> handlePlaybackRateChange()); // NEW
 
 		videoTimer = new Timer(33, e -> { // Initial delay, will be updated by playback rate
-			if (analysisLogic.isVideoSuccessfullyInitialized() && videoPlaying && !paused) {
+			if (appService.isVideoSuccessfullyInitialized() && videoPlaying && !paused) {
 				updateFrame();
 			}
 		});
@@ -237,9 +238,9 @@ public class CellCounterGUI extends JFrame {
 
 	private void updateCharts() {
 		// Fetch data for charts
-		double[] startTimesArray = analysisLogic.getTrackStartTimes().stream().mapToDouble(Double::doubleValue)
+		double[] startTimesArray = appService.getTrackStartTimes().stream().mapToDouble(Double::doubleValue)
 				.toArray();
-		double[] speedsArray = analysisLogic.getSpeeds().stream().mapToDouble(Double::doubleValue).toArray();
+		double[] speedsArray = appService.getSpeeds().stream().mapToDouble(Double::doubleValue).toArray();
 
 		// Re-create or update chart datasets
 		// Track Start Times Chart
@@ -259,12 +260,12 @@ public class CellCounterGUI extends JFrame {
 		JFileChooser chooser = new JFileChooser();
 		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
 			String path = chooser.getSelectedFile().getAbsolutePath();
-			if (analysisLogic.initializeVideo(path)) {
+			if (appService.initializeVideo(path)) {
 				videoPlaying = false; // Initial state: not playing
 				paused = true; // Initial state: effectively paused at frame 0
 				playButton.setText("▶ Play");
 				playButton.setEnabled(true);
-				frameForwardButton.setEnabled(analysisLogic.isCaptureActive()); // Can step from frame 0
+				frameForwardButton.setEnabled(appService.isCaptureActive()); // Can step from frame 0
 				resetButton.setEnabled(true);
 				fastButton.setEnabled(true);
 				mog2ViewButton.setEnabled(true);
@@ -275,7 +276,7 @@ public class CellCounterGUI extends JFrame {
 				playbackRateSpinner.setValue(DEFAULT_VIDEO_RATE);
 				updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
 
-				Mat firstFrame = analysisLogic.getLastProcessedFrame();
+				Mat firstFrame = appService.getLastProcessedFrame();
 				if (firstFrame != null && !firstFrame.empty()) {
 					videoLabel.setText(null);
 					videoLabel.setIcon(new ImageIcon(matToBufferedImage(firstFrame)));
@@ -308,7 +309,7 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void handlePlayPauseToggle() {
-		if (!analysisLogic.isVideoSuccessfullyInitialized()) {
+		if (!appService.isVideoSuccessfullyInitialized()) {
 			return;
 		}
 
@@ -318,13 +319,13 @@ public class CellCounterGUI extends JFrame {
 			videoTimer.stop();
 			playButton.setText("▶ Play");
 			// Enable frame forward only if there are more frames
-			frameForwardButton.setEnabled(analysisLogic.isCaptureActive());
+			frameForwardButton.setEnabled(appService.isCaptureActive());
 			System.out.println("Video Paused.");
 
 		} else if (paused) {
 			// Case 2: Video is paused -> Resume it
 			// Ensure capture is still active (e.g., didn't reach end via frame forward)
-			if (!analysisLogic.isCaptureActive()) {
+			if (!appService.isCaptureActive()) {
 				JOptionPane.showMessageDialog(this, "Video has ended. Please reset to play again.", "Video Ended",
 						JOptionPane.INFORMATION_MESSAGE);
 				playButton.setText("▶ Play"); // Keep as play, implying reset is needed
@@ -341,13 +342,13 @@ public class CellCounterGUI extends JFrame {
 		} else {
 			// Case 3: Video is stopped (neither playing nor paused, e.g., initial, after
 			// reset, or after end) -> Start it
-			if (!analysisLogic.isCaptureActive()) { // Video might have ended or not ready
+			if (!appService.isCaptureActive()) { // Video might have ended or not ready
 				int choice = JOptionPane.showConfirmDialog(this,
 						"Video has finished or is not ready. Reset and play from the beginning?", "Play Video",
 						JOptionPane.YES_NO_OPTION);
 				if (choice == JOptionPane.YES_OPTION) {
 					handleResetVideo(); // This sets captureActive if successful & leaves it paused
-					if (!analysisLogic.isCaptureActive()) {
+					if (!appService.isCaptureActive()) {
 						System.out.println("Reset failed or cancelled, cannot play.");
 						return; // Reset failed or user cancelled
 					}
@@ -375,7 +376,7 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void handleResetVideo() {
-		if (!analysisLogic.isVideoSuccessfullyInitialized()) {
+		if (!appService.isVideoSuccessfullyInitialized()) {
 			JOptionPane.showMessageDialog(this, "No video has been successfully loaded to reset.", "Reset Error",
 					JOptionPane.WARNING_MESSAGE);
 			return;
@@ -386,14 +387,14 @@ public class CellCounterGUI extends JFrame {
 		playButton.setText("▶ Play");
 		playButton.setEnabled(true);
 		mog2ViewButton.setSelected(false);
-		analysisLogic.setDisplayMOG2Foreground(false);
+		appService.setDisplayMOG2Foreground(false);
 		playbackRateSpinner.setValue(DEFAULT_VIDEO_RATE);
 		updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
 
-		analysisLogic.resetAnalysisForCurrentVideo();
-		Mat firstFrameAfterReset = analysisLogic.getLastProcessedFrame();
+		appService.resetAnalysisForCurrentVideo();
+		Mat firstFrameAfterReset = appService.getLastProcessedFrame();
 
-		frameForwardButton.setEnabled(analysisLogic.isCaptureActive()); // Enable if reset was successful
+		frameForwardButton.setEnabled(appService.isCaptureActive()); // Enable if reset was successful
 
 		if (firstFrameAfterReset != null && !firstFrameAfterReset.empty()) {
 			videoLabel.setIcon(new ImageIcon(matToBufferedImage(firstFrameAfterReset)));
@@ -408,7 +409,7 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void handlePlaybackRateChange() {
-		if (!analysisLogic.isVideoSuccessfullyInitialized() || analysisLogic.getFps() <= 0) {
+		if (!appService.isVideoSuccessfullyInitialized() || appService.getFps() <= 0) {
 			return;
 		}
 		double rate = DEFAULT_VIDEO_RATE;
@@ -422,7 +423,7 @@ public class CellCounterGUI extends JFrame {
 	private void updateVideoTimerDelay(double rate) {
 		if (rate <= 0.01)
 			rate = 0.01; // Prevent division by zero or excessively long delay
-		double fps = analysisLogic.getFps();
+		double fps = appService.getFps();
 		if (fps <= 0)
 			fps = 30; // Fallback fps
 
@@ -432,11 +433,11 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void updateFrame() {
-		Mat frame = analysisLogic.processNextFrameForGUI();
+		Mat frame = appService.processNextFrameForGUI();
 		if (frame != null && !frame.empty()) {
 			videoLabel.setIcon(new ImageIcon(matToBufferedImage(frame)));
 			updateCharts();
-		} else if (frame == null && !analysisLogic.isCaptureActive() && (videoPlaying || paused)) {
+		} else if (frame == null && !appService.isCaptureActive() && (videoPlaying || paused)) {
 			videoTimer.stop();
 			videoPlaying = false; // No longer actively playing
 			paused = true; // Effectively paused at the end
@@ -463,11 +464,11 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void handleMOG2Toggle(ItemEvent e) {
-		if (!analysisLogic.isVideoSuccessfullyInitialized())
+		if (!appService.isVideoSuccessfullyInitialized())
 			return;
 		boolean showMask = (e.getStateChange() == ItemEvent.SELECTED);
-		analysisLogic.setDisplayMOG2Foreground(showMask);
-		Mat currentDisplayMat = analysisLogic.getLastProcessedFrame();
+		appService.setDisplayMOG2Foreground(showMask);
+		Mat currentDisplayMat = appService.getLastProcessedFrame();
 		if (currentDisplayMat != null && !currentDisplayMat.empty()) {
 			videoLabel.setIcon(new ImageIcon(matToBufferedImage(currentDisplayMat.clone())));
 		} else {
@@ -476,7 +477,7 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void handleFastAnalyze() {
-		if (!analysisLogic.isVideoSuccessfullyInitialized()) { // Check if a base video is ready
+		if (!appService.isVideoSuccessfullyInitialized()) { // Check if a base video is ready
 			JOptionPane.showMessageDialog(this, "Please load a video first using 'Analyze Video'.", "No Video",
 					JOptionPane.WARNING_MESSAGE);
 			return;
@@ -493,10 +494,10 @@ public class CellCounterGUI extends JFrame {
 		paused = true; // Conceptually paused during fast analysis
 		playButton.setText("Play");
 
-		analysisLogic.resetAnalysisForCurrentVideo();
+		appService.resetAnalysisForCurrentVideo();
 		; // Reset for a fresh analysis run
 
-		int totalFrames = analysisLogic.getFrameCount();
+		int totalFrames = appService.getFrameCount();
 		System.out.println("Fast analysis starting. Total frames: " + totalFrames);
 		int updateFrequency = Math.max(1, totalFrames / 100); // Update GUI ~100 times
 
@@ -506,16 +507,16 @@ public class CellCounterGUI extends JFrame {
 				for (int i = 0; i < totalFrames; i++) {
 					// Process frame using the analysis-focused method (might not draw all overlays
 					// for speed)
-					Mat processedAnalyticalFrame = analysisLogic.processNextFrameForAnalysis();
+					Mat processedAnalyticalFrame = appService.processNextFrameForAnalysis();
 					if (processedAnalyticalFrame == null)
 						break; // End of video or error
 
 					if (i % updateFrequency == 0 || i == totalFrames - 1) {
 
-						Mat frameToShow = analysisLogic.getLastProcessedFrame();
+						Mat frameToShow = appService.getLastProcessedFrame();
 						if (frameToShow != null && !frameToShow.empty()) {
 							Mat frameWithText = frameToShow.clone();
-							double percent = (analysisLogic.getCurrentFrameNumber() / (double) totalFrames) * 100;
+							double percent = (appService.getCurrentFrameNumber() / (double) totalFrames) * 100;
 							Imgproc.putText(frameWithText, String.format("Fast Analyze: %.1f%%", percent),
 									new Point(10, frameWithText.rows() - 20), Imgproc.FONT_HERSHEY_SIMPLEX, 0.8,
 									new Scalar(0, 255, 255), 2);
@@ -549,8 +550,8 @@ public class CellCounterGUI extends JFrame {
 
 			@Override
 			protected void done() {
-				// Display the very last frame from analysisLogic
-				Mat finalFrame = analysisLogic.getLastProcessedFrame();
+				// Display the very last frame from appService
+				Mat finalFrame = appService.getLastProcessedFrame();
 				if (finalFrame != null && !finalFrame.empty()) {
 					videoLabel.setIcon(new ImageIcon(matToBufferedImage(finalFrame)));
 				}
@@ -570,7 +571,7 @@ public class CellCounterGUI extends JFrame {
 
 	private void handleFrameForward() {
 	    // Only allow if video is initialized, paused, and capture is active
-	    if (analysisLogic.isVideoSuccessfullyInitialized() && paused && analysisLogic.isCaptureActive()) {
+	    if (appService.isVideoSuccessfullyInitialized() && paused && appService.isCaptureActive()) {
 	        // Temporarily set videoPlaying to true for updateFrame to process one frame as if it's "playing"
 	        // This is a bit of a conceptual stretch, but updateFrame's logic uses videoPlaying.
 	        // Or, updateFrame could have a mode for single step.
@@ -578,7 +579,7 @@ public class CellCounterGUI extends JFrame {
 	        updateFrame(); // Process and display one frame
 
 	        // After processing, if capture is no longer active (last frame was just processed)
-	        if (!analysisLogic.isCaptureActive()) {
+	        if (!appService.isCaptureActive()) {
 	            frameForwardButton.setEnabled(false);
 	            playButton.setText("▶ Play"); // Video ended
 	            videoPlaying = false; // Ensure it's marked as not playing
@@ -589,125 +590,59 @@ public class CellCounterGUI extends JFrame {
 	}
 
 	private void handleSaveAnalysis() {
-		// Now, check if a video was ever successfully initialized and thus has data
-		// (even if playback finished)
-		if (!analysisLogic.isVideoSuccessfullyInitialized()) {
+		if (!appService.isVideoSuccessfullyInitialized()) {
 			JOptionPane.showMessageDialog(this, "No video has been loaded or analysis performed.", "Error",
-					JOptionPane.ERROR_MESSAGE);
-			return;
-		}
-		AnalysisLogic.CentroidTracker tracker = analysisLogic.getCellTracker();
-		if (tracker == null) { // Should not happen if videoSuccessfullyInitialized is true and init was proper
-			JOptionPane.showMessageDialog(this, "Analysis data (tracker) is not available.", "Error",
 					JOptionPane.ERROR_MESSAGE);
 			return;
 		}
 
 		String[] metadata = promptForMetadata();
 		if (metadata == null)
-			return; // user canceled
-
-		String cellType = metadata[0];
-		String substrate = metadata[1];
-		String flow = metadata[2];
+			return;
+		ExportMetadata exportMetadata = new ExportMetadata(metadata[0], metadata[1], metadata[2]);
 
 		JFileChooser chooser = new JFileChooser();
 		chooser.setDialogTitle("Save Analysis Data");
 		chooser.setSelectedFile(new File("analysis_results.csv"));
 		if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
 			File file = chooser.getSelectedFile();
-			try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
-				pw.println(
-						"CellType,Substrate,FlowCondition,CellID,FirstSeenFrame,FirstSeenTime(s),CrossingFrame,CrossingTime(s),"
-								+ "TotalDistance,DistanceToCross,DistanceAfterCross,"
-								+ "AvgFrameDistance,MedianFrameDistance,FramesTracked,FramesMissed,Speed(pixels/sec)");
-
-				Map<Integer, AnalysisLogic.Track> allTracks = new HashMap<>();
-				allTracks.putAll(tracker.objects);
-				allTracks.putAll(tracker.completeTracks);
-				double fps = analysisLogic.getFps();
-
-				for (Map.Entry<Integer, AnalysisLogic.Track> entry : allTracks.entrySet()) {
-					int cellID = entry.getKey();
-					AnalysisLogic.Track track = entry.getValue();
-					if (track.history.isEmpty())
-						continue;
-
-					Map<String, Object> metrics = analysisLogic.computeMetricsForTrack(track);
-					int firstFrame = track.startFrame;
-					double firstTime = track.startTime;
-					int crossFrame = track.startFrame;
-					double crossTime = -1.0;
-					if (crossFrame > 0) {
-						crossTime = (double) crossFrame / fps;
-					}
-
-					pw.printf("%s,%s,%s,%d,%d,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f%n", cellType, substrate,
-							flow, cellID, firstFrame, firstTime, crossFrame > 0 ? crossFrame : -1, crossTime,
-							(Double) metrics.get("TotalDistance"), (Double) metrics.get("DistanceToCross"),
-							(Double) metrics.get("DistanceAfterCross"), (Double) metrics.get("AvgFrameDistance"),
-							(Double) metrics.get("MedianFrameDistance"), (Integer) metrics.get("FramesTracked"),
-							(Integer) metrics.get("FramesMissed"), (Double) metrics.get("Speed"));
-
-				}
+			try {
+				appService.saveAnalysisCsv(file, exportMetadata);
 				JOptionPane.showMessageDialog(this, "Analysis saved to " + file.getAbsolutePath(), "Success",
 						JOptionPane.INFORMATION_MESSAGE);
-			} catch (IOException ex) {
+			} catch (IOException | IllegalStateException ex) {
 				JOptionPane.showMessageDialog(this, "Error saving analysis: " + ex.getMessage(), "Error",
 						JOptionPane.ERROR_MESSAGE);
 			}
-
 		}
 	}
 
 	private void handleSaveFootprintData() {
-		if (!analysisLogic.isVideoSuccessfullyInitialized()) {
+		if (!appService.isVideoSuccessfullyInitialized()) {
 			JOptionPane.showMessageDialog(this, "No video has been loaded or analysis performed for footprint data.",
 					"Error", JOptionPane.ERROR_MESSAGE);
 			return;
 		}
-		AnalysisLogic.CentroidTracker tracker = analysisLogic.getCellTracker();
-		if (tracker == null) {
-			JOptionPane.showMessageDialog(this, "Footprint data (tracker) is not available.", "Error",
-					JOptionPane.ERROR_MESSAGE);
-			return;
-		}
 
-		// Prompt for metadata
 		String[] metadata = promptForMetadata();
 		if (metadata == null)
-			return; // User canceled
-		String cellType = metadata[0];
-		String substrate = metadata[1];
-		String flow = metadata[2];
+			return;
+		ExportMetadata exportMetadata = new ExportMetadata(metadata[0], metadata[1], metadata[2]);
 
 		JFileChooser chooser = new JFileChooser();
 		chooser.setDialogTitle("Save Footprint Data");
 		chooser.setSelectedFile(new File("footprint_data.csv"));
 		if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
 			File file = chooser.getSelectedFile();
-			try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
-				pw.println("CellType,Substrate,FlowCondition,CellID,Frame,UL_X,UL_Y,LR_X,LR_Y");
-				Map<Integer, AnalysisLogic.Track> allTracks = new HashMap<>();
-				allTracks.putAll(tracker.objects);
-				allTracks.putAll(tracker.completeTracks);
-
-				for (Map.Entry<Integer, AnalysisLogic.Track> entry : allTracks.entrySet()) {
-					int cellID = entry.getKey();
-					AnalysisLogic.Track track = entry.getValue();
-					for (AnalysisLogic.HistoryItem item : track.history) {
-						pw.printf("%s,%s,%s,%d,%d,%d,%d,%d,%d%n", cellType, substrate, flow, cellID, item.frame,
-								(int) item.UL.x, (int) item.UL.y, (int) item.LR.x, (int) item.LR.y);
-					}
-				}
+			try {
+				appService.saveFootprintCsv(file, exportMetadata);
 				JOptionPane.showMessageDialog(this, "Footprint data saved to " + file.getAbsolutePath(), "Success",
 						JOptionPane.INFORMATION_MESSAGE);
-			} catch (IOException ex) {
+			} catch (IOException | IllegalStateException ex) {
 				JOptionPane.showMessageDialog(this, "Error saving footprint data: " + ex.getMessage(), "Error",
 						JOptionPane.ERROR_MESSAGE);
 			}
 		}
-
 	}
 
 	private Image matToBufferedImage(Mat mat) {
@@ -736,69 +671,7 @@ public class CellCounterGUI extends JFrame {
 	// ----- END PLACEHOLDER -----
 
 	public static void main(String[] args) {
-		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-
-		try {
-
-			// Apply Nimbus Look and Feel for a more modern appearance
-			boolean nimbusFound = false;
-			for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-				if ("Nimbus".equals(info.getName())) {
-					UIManager.setLookAndFeel(info.getClassName());
-					nimbusFound = true;
-					break;
-				}
-			}
-			if (!nimbusFound) { // If Nimbus is not available, fall back to the system L&F
-				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-			}
-		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
-				| UnsupportedLookAndFeelException e) {
-			// If L&F setting fails, it will use the default Java L&F.
-			System.err.println("Failed to set Look and Feel: " + e.getMessage());
-			// e.printStackTrace(); // Optionally print stack trace
-		}
-
-		if (args.length == 5) {
-			HeadlessProcessor processor = new HeadlessProcessor();
-			processor.run(args[0], args[1], args[2], args[3], args[4]);
-			System.exit(0);
-		} else {
-			SwingUtilities.invokeLater(() -> {
-				// Optional Splash Screen (can be removed if not desired)
-				JWindow splash = new JWindow();
-				// Simple splash content
-				JPanel splashPanel = new JPanel(new BorderLayout());
-				splashPanel.setBackground(new Color(230, 230, 250)); // Light lavender
-				splashPanel.setBorder(BorderFactory.createLineBorder(new Color(0, 0, 128), 2)); // Navy border
-				JLabel splashLabel = new JLabel("<html><center>Cell Counter<br/><i>Infiltrate Bio</i></center></html>",
-						SwingConstants.CENTER);
-				splashLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
-				splashLabel.setForeground(new Color(0, 0, 128)); // Navy text
-				splashPanel.add(splashLabel, BorderLayout.CENTER);
-				JProgressBar progressBar = new JProgressBar();
-				progressBar.setIndeterminate(true);
-				splashPanel.add(progressBar, BorderLayout.SOUTH);
-				splash.getContentPane().add(splashPanel);
-
-				splash.setSize(400, 150);
-				splash.setLocationRelativeTo(null); // Center splash
-				splash.setVisible(true);
-
-				// Simulate loading time
-				new Timer(2000, (ae) -> { // Show splash for 2 seconds
-					splash.setVisible(false);
-					splash.dispose();
-					new CellCounterGUI().setVisible(true);
-				}) {
-					private static final long serialVersionUID = -6312010934618202078L;
-
-					{
-						setRepeats(false);
-					}
-				}.start();
-			});
-		}
+		CellCounterApp.main(args);
 	}
 
 	private String[] promptForMetadata() {

@@ -28,6 +28,7 @@ public class AnalysisLogic {
 	private Mat referenceFrame = null;
 	private boolean displayMOG2Foreground = false;
 	private Mat currentRawFrameForDisplay = null;
+	private Mat lastForegroundMaskForDisplay = null;
 	private double minContourArea = 5;
 	private static final double MAX_RECT_CIRCUMFERENCE = 90.0;
 
@@ -318,6 +319,10 @@ public class AnalysisLogic {
 		this.trackStartTimes.clear();
 		this.speeds.clear();
 		this.displayMOG2Foreground = false; // Default view
+		if (this.lastForegroundMaskForDisplay != null) {
+			this.lastForegroundMaskForDisplay.release();
+			this.lastForegroundMaskForDisplay = null;
+		}
 
 		Mat firstFrameMat = new Mat();
 		if (this.cap.read(firstFrameMat) && !firstFrameMat.empty()) {
@@ -469,6 +474,10 @@ public class AnalysisLogic {
 			this.currentRawFrameForDisplay.release();
 			this.currentRawFrameForDisplay = null;
 		}
+		if (this.lastForegroundMaskForDisplay != null) {
+			this.lastForegroundMaskForDisplay.release();
+			this.lastForegroundMaskForDisplay = null;
+		}
 
 		System.out.println("Video resources released.");
 	}
@@ -514,6 +523,10 @@ public class AnalysisLogic {
 		// IMPORTANT: Add thresholding after normalization
 		// This threshold value (e.g., 150) is crucial and may need tuning.
 		Imgproc.threshold(fgmask, fgmask, 150, 255, Imgproc.THRESH_BINARY);
+		if (this.lastForegroundMaskForDisplay != null) {
+			this.lastForegroundMaskForDisplay.release();
+		}
+		this.lastForegroundMaskForDisplay = fgmask.clone();
 
 		List<Rect> rects = new ArrayList<>();
 	    for (MatOfPoint c : contours) {
@@ -588,7 +601,7 @@ public class AnalysisLogic {
 		}
 		// The `trackStartTimes` list is populated in CentroidTracker.register().
 
-		Mat displayImage = generateDisplayFromState(frameInput, this.displayMOG2Foreground);
+		Mat displayImage = generateDisplayFromState(frameInput, this.displayMOG2Foreground, fgmask);
 		fgmask.release();
 		return displayImage;
 	}
@@ -604,7 +617,16 @@ public class AnalysisLogic {
 
 		List<HistoryItem> history = track.history;
 		if (history.isEmpty()) {
-			 return metrics;
+			metrics.put("TotalDistance", 0.0);
+			metrics.put("DistanceToCross", 0.0);
+			metrics.put("DistanceAfterCross", 0.0);
+			metrics.put("AvgFrameDistance", 0.0);
+			metrics.put("MedianFrameDistance", 0.0);
+			metrics.put("FramesTracked", 0);
+			metrics.put("FramesMissed", track.missed);
+			metrics.put("Speed", 0.0);
+			metrics.put("Speed (Overall Avg)", 0.0);
+			return metrics;
 		}
 
 		double totalDistance = 0;
@@ -649,12 +671,13 @@ public class AnalysisLogic {
 		double overallSpeed = timeElapsedTracked > 0 ? totalDistance / timeElapsedTracked : 0;
 
 		metrics.put("TotalDistance", totalDistance);
-		// metrics.put("DistanceToCross", 0.0); // REMOVED or set to N/A
-		// metrics.put("DistanceAfterCross", 0.0); // REMOVED or set to N/A
+		metrics.put("DistanceToCross", 0.0);
+		metrics.put("DistanceAfterCross", 0.0);
 		metrics.put("AvgFrameDistance", avgMove);
 		metrics.put("MedianFrameDistance", medianMove);
 		metrics.put("FramesTracked", framesTracked);
 		metrics.put("FramesMissed", track.missed);
+		metrics.put("Speed", overallSpeed);
 		metrics.put("Speed (Overall Avg)", overallSpeed); // Clarify this is overall average
 		return metrics;
 	}
@@ -682,7 +705,8 @@ public class AnalysisLogic {
 
 				// generateDisplayFromState expects a Mat it can use or clone.
 				// rotatedFrame here is a fresh Mat (or same as rawCloneForRotation if angle=0)
-				Mat newDisplayFrame = generateDisplayFromState(rotatedFrame, this.displayMOG2Foreground);
+					Mat newDisplayFrame = generateDisplayFromState(rotatedFrame, this.displayMOG2Foreground,
+							this.lastForegroundMaskForDisplay);
 
 				if (this.lastProcessedFrame != null) {
 					this.lastProcessedFrame.release();
@@ -713,48 +737,29 @@ public class AnalysisLogic {
 		}
 	}
 
-	private Mat generateDisplayFromState(Mat rotatedFrameInput, boolean showMaskView) {
+	private Mat generateDisplayFromState(Mat rotatedFrameInput, boolean showMaskView, Mat precomputedMask) {
 		Mat displayOutput;
-		Mat tempFgmask = new Mat();
-
-		Mat sourceForBGS = rotatedFrameInput;
-		if (referenceFrame != null && !referenceFrame.empty()) {
-			Mat diff = new Mat();
-			Core.absdiff(rotatedFrameInput, referenceFrame, diff);
-			sourceForBGS = diff;
+		Mat maskForDisplay = precomputedMask;
+		boolean releaseMaskForDisplay = false;
+		if (maskForDisplay == null || maskForDisplay.empty()) {
+			maskForDisplay = Mat.zeros(rotatedFrameInput.size(), CvType.CV_8UC1);
+			releaseMaskForDisplay = true;
 		}
-		if (fgbg == null) {
-			/* init fgbg or return error image */ return rotatedFrameInput.clone();
-		}
-		fgbg.apply(sourceForBGS, tempFgmask);
-		if (sourceForBGS != rotatedFrameInput)
-			sourceForBGS.release();
 
-		Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(3, 3));
-		Imgproc.morphologyEx(tempFgmask, tempFgmask, Imgproc.MORPH_OPEN, kernel, new Point(-1, -1), 2);
-		Imgproc.morphologyEx(tempFgmask, tempFgmask, Imgproc.MORPH_DILATE, kernel, new Point(-1, -1), 2);
-		kernel.release();
-		
-		// Alternative: Histogram Stretching (Normalization)
-		Core.normalize(tempFgmask, tempFgmask, 0, 255, Core.NORM_MINMAX);
-		// IMPORTANT: Add thresholding after normalization
-		// This threshold value (e.g., 150) is crucial and may need tuning.
-		Imgproc.threshold(tempFgmask, tempFgmask, 150, 255, Imgproc.THRESH_BINARY);
-		
 		Scalar newTrackColor = new Scalar(0, 0, 255); // Red for new
 		Scalar existingTrackColor = new Scalar(0, 255, 0); // Green for existing
 
 		if (showMaskView) {
 			Mat bgrFgmask = new Mat();
-			Imgproc.cvtColor(tempFgmask, bgrFgmask, Imgproc.COLOR_GRAY2BGR);
-			tempFgmask.release();
+			Imgproc.cvtColor(maskForDisplay, bgrFgmask, Imgproc.COLOR_GRAY2BGR);
 			displayOutput = bgrFgmask;
 			// Imgproc.line(displayOutput, new Point(finish_line_x, 0), ..., new
 			// Scalar(0,0,255),2); // REMOVED
 		} else {
 			displayOutput = rotatedFrameInput.clone();
-			tempFgmask.release();
-			
+		}
+		if (releaseMaskForDisplay) {
+			maskForDisplay.release();
 		}
 
 		// Draw objects (bounding boxes and IDs) on displayOutput
