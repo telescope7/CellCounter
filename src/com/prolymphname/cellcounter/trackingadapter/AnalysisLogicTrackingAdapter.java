@@ -93,6 +93,16 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
+    public TrackingConfiguration getTrackingConfiguration() {
+        return analysisLogic.getTrackingConfiguration();
+    }
+
+    @Override
+    public void setTrackingConfiguration(TrackingConfiguration trackingConfiguration) {
+        analysisLogic.setTrackingConfiguration(trackingConfiguration);
+    }
+
+    @Override
     public AnalysisLogic.CentroidTracker getCellTracker() {
         return analysisLogic.getCellTracker();
     }

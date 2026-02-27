@@ -37,6 +37,10 @@ public interface TrackingAdapter {
 
     void setReferenceFrameForDiff(Mat frame);
 
+    TrackingConfiguration getTrackingConfiguration();
+
+    void setTrackingConfiguration(TrackingConfiguration trackingConfiguration);
+
     AnalysisLogic.CentroidTracker getCellTracker();
 
     Map<String, Object> computeMetricsForTrack(AnalysisLogic.Track track);

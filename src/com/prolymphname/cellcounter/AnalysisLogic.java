@@ -1,5 +1,6 @@
 package com.prolymphname.cellcounter;
 
+import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import org.opencv.core.*;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.Videoio;
@@ -10,8 +11,6 @@ import org.opencv.video.Video;
 import java.util.*;
 
 public class AnalysisLogic {
-
-	private static final int MAX_FRAMES_DISAPPEARED = 10;
 
 	// Fields from previous versions (ensure they are present)
 	private VideoCapture cap;
@@ -29,8 +28,7 @@ public class AnalysisLogic {
 	private boolean displayMOG2Foreground = false;
 	private Mat currentRawFrameForDisplay = null;
 	private Mat lastForegroundMaskForDisplay = null;
-	private double minContourArea = 5;
-	private static final double MAX_RECT_CIRCUMFERENCE = 90.0;
+	private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
 
 	private List<Double> trackStartTimes = new ArrayList<>(); // Renamed from crossingTimes
 	private List<Double> speeds = new ArrayList<>();
@@ -66,19 +64,19 @@ public class AnalysisLogic {
 		public int maxDisappeared; // Max consecutive frames an object can disappear before being deregistered
 		public Map<Integer, Track> completeTracks = new HashMap<>();
 		private AnalysisLogic outer; // To access trackStartTimes and FPS
+		private final double maxVerticalDisplacementPixels;
+		private final double minHorizontalMovementPixels;
+		private final double maxAssociationDistanceSq;
 
-		// Movement constraints for matching
-		private static final double MAX_VERTICAL_DISPLACEMENT_PIXELS = 40.0; // Tunable: Max allowed Y movement
-		private static final double MIN_HORIZONTAL_MOVEMENT_PIXELS = -3.0; // Tunable: Max allowed backward X movement
-																			// (negative for left, positive for
-																			// tolerance if objects must move right)
-																			// Set to 0 if must stay or move right. -5
-																			// allows minor jitter left.
-		private static final double MAX_ASSOCIATION_DISTANCE_SQ = 175.0 * 175.0; // Max Euclidean distance squared for
-																				// association (tunable)
-
-		public CentroidTracker(int maxDisappearedFrames, AnalysisLogic outer) {
+		public CentroidTracker(int maxDisappearedFrames,
+							   double maxVerticalDisplacementPixels,
+							   double minHorizontalMovementPixels,
+							   double maxAssociationDistancePixels,
+							   AnalysisLogic outer) {
 			this.maxDisappeared = maxDisappearedFrames; // If not updated for 'maxDisappearedFrames', it's removed
+			this.maxVerticalDisplacementPixels = maxVerticalDisplacementPixels;
+			this.minHorizontalMovementPixels = minHorizontalMovementPixels;
+			this.maxAssociationDistanceSq = maxAssociationDistancePixels * maxAssociationDistancePixels;
 			this.outer = outer;
 		}
 
@@ -163,23 +161,23 @@ public class AnalysisLogic {
 
 					// Apply movement constraints
 					// 1. No significant leftward movement
-					if (deltaX < MIN_HORIZONTAL_MOVEMENT_PIXELS) {
-						D[i][j] = Double.MAX_VALUE;
-						continue;
-					}
-					// 2. Limited vertical drift
-					if (Math.abs(deltaY) > MAX_VERTICAL_DISPLACEMENT_PIXELS) {
-						D[i][j] = Double.MAX_VALUE;
-						continue;
-					}
+						if (deltaX < minHorizontalMovementPixels) {
+							D[i][j] = Double.MAX_VALUE;
+							continue;
+						}
+						// 2. Limited vertical drift
+						if (Math.abs(deltaY) > maxVerticalDisplacementPixels) {
+							D[i][j] = Double.MAX_VALUE;
+							continue;
+						}
 
 					// 3. Calculate squared Euclidean distance (more efficient than sqrt for
 					// comparison)
 					double distSq = deltaX * deltaX + deltaY * deltaY;
-					if (distSq > MAX_ASSOCIATION_DISTANCE_SQ) {
-						D[i][j] = Double.MAX_VALUE;
-					} else {
-						D[i][j] = distSq;
+						if (distSq > maxAssociationDistanceSq) {
+							D[i][j] = Double.MAX_VALUE;
+						} else {
+							D[i][j] = distSq;
 					}
 				}
 			}
@@ -209,7 +207,7 @@ public class AnalysisLogic {
 					continue; // No detections for this track (should not happen if inputCentroids not empty)
 
 				int bestDetectionIdx = -1;
-				double minDistanceSq = MAX_ASSOCIATION_DISTANCE_SQ; // Use the threshold as initial min
+					double minDistanceSq = maxAssociationDistanceSq; // Use the threshold as initial min
 
 				for (int detectionIdx = 0; detectionIdx < D[trackIdx].length; detectionIdx++) {
 					if (!usedDetectionIndices.contains(detectionIdx) && D[trackIdx][detectionIdx] < minDistanceSq) {
@@ -271,9 +269,22 @@ public class AnalysisLogic {
 	} // End CentroidTracker
 
 	public AnalysisLogic() {
-		fgbg = Video.createBackgroundSubtractorMOG2(500, 10, false);
-		// Pass 'this' to CentroidTracker to allow access to trackStartTimes
-		cellTracker = new CentroidTracker(MAX_FRAMES_DISAPPEARED, this); // maxDisappeared = 40
+		rebuildTrackingPipeline();
+	}
+
+	private void rebuildTrackingPipeline() {
+		TrackingConfiguration cfg = trackingConfiguration.normalized();
+		this.trackingConfiguration = cfg;
+		this.fgbg = Video.createBackgroundSubtractorMOG2(
+				cfg.getMog2HistoryFrames(),
+				cfg.getMog2VarThreshold(),
+				cfg.isMog2DetectShadows());
+		this.cellTracker = new CentroidTracker(
+				cfg.getMaxFramesDisappeared(),
+				cfg.getMaxVerticalDisplacementPixels(),
+				cfg.getMinHorizontalMovementPixels(),
+				cfg.getMaxAssociationDistancePixels(),
+				this);
 	}
 
 	public boolean initializeVideo(String videoPath) {
@@ -291,8 +302,24 @@ public class AnalysisLogic {
         if (!this.captureActive || this.lastProcessedFrame == null || this.lastProcessedFrame.empty()) {
             releaseVideo(); return false;
         }
-        return true;
-    }
+	        return true;
+	    }
+
+	public TrackingConfiguration getTrackingConfiguration() {
+		return trackingConfiguration;
+	}
+
+	public void setTrackingConfiguration(TrackingConfiguration trackingConfiguration) {
+		if (trackingConfiguration == null) {
+			return;
+		}
+		this.trackingConfiguration = trackingConfiguration.normalized();
+		if (this.videoSuccessfullyInitialized && this.cap != null && this.cap.isOpened()) {
+			resetStateAndPrepareFirstFrame();
+		} else {
+			rebuildTrackingPipeline();
+		}
+	}
 
 
 	public void setReferenceFrameForDiff(Mat frame) {
@@ -314,8 +341,7 @@ public class AnalysisLogic {
 			return;
 		}
 
-		this.fgbg = Video.createBackgroundSubtractorMOG2(500, 50, false); // Re-init BGS
-		this.cellTracker = new CentroidTracker(MAX_FRAMES_DISAPPEARED, this); // Re-init tracker, maxDisappeared=40
+		rebuildTrackingPipeline();
 		this.trackStartTimes.clear();
 		this.speeds.clear();
 		this.displayMOG2Foreground = false; // Default view
@@ -507,9 +533,12 @@ public class AnalysisLogic {
         if (fgbg != null) fgbg.apply(sourceForBGS, fgmask); else { Mat.zeros(frameInput.size(), CvType.CV_8UC1).copyTo(fgmask); }
         if (sourceForBGS != frameInput) sourceForBGS.release(); // Release diff if it was created
 
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(3,3));
-        Imgproc.morphologyEx(fgmask, fgmask, Imgproc.MORPH_OPEN, kernel, new Point(-1,-1), 2);
-        Imgproc.morphologyEx(fgmask, fgmask, Imgproc.MORPH_DILATE, kernel, new Point(-1,-1), 2);
+		int kernelSize = trackingConfiguration.getMorphologyKernelSize();
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(kernelSize, kernelSize));
+        Imgproc.morphologyEx(fgmask, fgmask, Imgproc.MORPH_OPEN, kernel, new Point(-1,-1),
+				trackingConfiguration.getMorphologyOpenIterations());
+        Imgproc.morphologyEx(fgmask, fgmask, Imgproc.MORPH_DILATE, kernel, new Point(-1,-1),
+				trackingConfiguration.getMorphologyDilateIterations());
         kernel.release();
 
 		Mat fgmaskForContours = fgmask.clone();
@@ -520,9 +549,8 @@ public class AnalysisLogic {
 		
 		// Alternative: Histogram Stretching (Normalization)
 		Core.normalize(fgmask, fgmask, 0, 255, Core.NORM_MINMAX);
-		// IMPORTANT: Add thresholding after normalization
-		// This threshold value (e.g., 150) is crucial and may need tuning.
-		Imgproc.threshold(fgmask, fgmask, 150, 255, Imgproc.THRESH_BINARY);
+			// IMPORTANT: Add thresholding after normalization.
+			Imgproc.threshold(fgmask, fgmask, trackingConfiguration.getNormalizedMaskThreshold(), 255, Imgproc.THRESH_BINARY);
 		if (this.lastForegroundMaskForDisplay != null) {
 			this.lastForegroundMaskForDisplay.release();
 		}
@@ -530,15 +558,15 @@ public class AnalysisLogic {
 
 		List<Rect> rects = new ArrayList<>();
 	    for (MatOfPoint c : contours) {
-	        if (Imgproc.contourArea(c) < this.minContourArea) { //
-	            c.release();
-	            continue;
-	        }
+		        if (Imgproc.contourArea(c) < trackingConfiguration.getMinContourArea()) { //
+		            c.release();
+		            continue;
+		        }
 	        Rect r = Imgproc.boundingRect(c); //
 
 	        // New check for rectangle circumference
 	        double circumference = 2 * (r.width + r.height);
-	        if (circumference > MAX_RECT_CIRCUMFERENCE) {
+		        if (circumference > trackingConfiguration.getMaxRectCircumference()) {
 	            c.release(); // Release contour Mat
 	            // r is a local variable, no need to release an OpenCV Rect object itself
 	            continue; // Skip this rectangle

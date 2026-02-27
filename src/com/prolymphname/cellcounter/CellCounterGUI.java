@@ -2,6 +2,7 @@ package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.export.ExportMetadata;
+import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
@@ -23,6 +24,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.event.ItemEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.geom.Ellipse2D;
@@ -92,6 +94,7 @@ public class CellCounterGUI extends JFrame {
     private JButton resetButton;
     private JButton saveAnalysisButton;
     private JButton saveFootprintButton;
+    private JButton configurationButton;
     private JToggleButton mog2ViewButton;
     private JSlider playbackRateSlider;
 
@@ -179,10 +182,20 @@ public class CellCounterGUI extends JFrame {
         titleGroup.add(Box.createVerticalStrut(SPACE_XXS));
         titleGroup.add(subtitle);
 
+        configurationButton = createSecondaryButton("Configuration", new AppIcon(AppIcon.Kind.SETTINGS, Color.WHITE));
+        configurationButton.setFont(FONT_LABEL);
+        enforceButtonSize(configurationButton, 134);
         pipelineStateLabel = createChipLabel("Idle", CHIP_IDLE);
 
+        JPanel statusGroup = new JPanel();
+        statusGroup.setOpaque(false);
+        statusGroup.setLayout(new BoxLayout(statusGroup, BoxLayout.X_AXIS));
+        statusGroup.add(configurationButton);
+        statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
+        statusGroup.add(pipelineStateLabel);
+
         header.add(titleGroup, BorderLayout.WEST);
-        header.add(pipelineStateLabel, BorderLayout.EAST);
+        header.add(statusGroup, BorderLayout.EAST);
         return header;
     }
 
@@ -253,11 +266,13 @@ public class CellCounterGUI extends JFrame {
         videoLabel.setBackground(new Color(7, 19, 40));
         videoLabel.setPreferredSize(new Dimension(840, 560));
 
-        JScrollPane videoScroll = new JScrollPane(videoLabel);
-        videoScroll.setBorder(new LineBorder(new Color(82, 129, 193, 140), 1, true));
-        videoScroll.getViewport().setBackground(new Color(7, 19, 40));
+        JPanel videoFrame = new JPanel(new BorderLayout());
+        videoFrame.setOpaque(true);
+        videoFrame.setBackground(new Color(7, 19, 40));
+        videoFrame.setBorder(new LineBorder(new Color(82, 129, 193, 140), 1, true));
+        videoFrame.add(videoLabel, BorderLayout.CENTER);
 
-        videoCard.add(videoScroll, BorderLayout.CENTER);
+        videoCard.add(videoFrame, BorderLayout.CENTER);
         return videoCard;
     }
 
@@ -282,6 +297,7 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void bindActions() {
+        configurationButton.addActionListener(e -> handleConfigureTracking());
         analyzeButton.addActionListener(e -> handleAnalyzeVideo());
         playButton.addActionListener(e -> handlePlayPauseToggle());
         frameForwardButton.addActionListener(e -> handleFrameForward());
@@ -296,6 +312,207 @@ public class CellCounterGUI extends JFrame {
     private void setInitialControlState() {
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
         playbackRateValueLabel.setText(String.format("%.1fx", DEFAULT_VIDEO_RATE));
+    }
+
+    private void handleConfigureTracking() {
+        TrackingConfiguration current = appService.getTrackingConfiguration();
+        TrackingConfiguration updated = promptForTrackingConfiguration(current);
+        if (updated == null) {
+            return;
+        }
+
+        boolean wasInitialized = appService.isVideoSuccessfullyInitialized();
+        boolean wasPlaying = videoPlaying && !paused;
+        videoTimer.stop();
+        videoPlaying = false;
+        paused = wasInitialized;
+        setPlayButtonPlaying(false);
+
+        appService.setTrackingConfiguration(updated);
+
+        if (wasInitialized) {
+            mog2ViewButton.setSelected(false);
+            appService.setDisplayMOG2Foreground(false);
+            Mat firstFrame = appService.getLastProcessedFrame();
+            if (firstFrame != null && !firstFrame.empty()) {
+                videoLabel.setIcon(new ImageIcon(matToBufferedImage(firstFrame)));
+                videoLabel.setText(null);
+            }
+            updateCharts();
+            setPipelineState("Configured", CHIP_ACTIVE);
+        } else {
+            setPipelineState("Idle", CHIP_IDLE);
+        }
+
+        String message = wasPlaying
+                ? "Tracking configuration applied. Playback was paused and reset to frame 1."
+                : "Tracking configuration applied.";
+        JOptionPane.showMessageDialog(this, message, "Configuration", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private TrackingConfiguration promptForTrackingConfiguration(TrackingConfiguration current) {
+        JSpinner maxFramesDisappeared = new JSpinner(new SpinnerNumberModel(current.getMaxFramesDisappeared(), 1, 10000, 1));
+        JSpinner minContourArea = new JSpinner(new SpinnerNumberModel(current.getMinContourArea(), 0.0, 100000.0, 0.5));
+        JSpinner maxRectCircumference = new JSpinner(new SpinnerNumberModel(current.getMaxRectCircumference(), 1.0, 100000.0, 1.0));
+        JSpinner maxVerticalDisplacement = new JSpinner(
+                new SpinnerNumberModel(current.getMaxVerticalDisplacementPixels(), 0.0, 100000.0, 1.0));
+        JSpinner minHorizontalMovement = new JSpinner(
+                new SpinnerNumberModel(current.getMinHorizontalMovementPixels(), -100000.0, 100000.0, 0.5));
+        JSpinner maxAssociationDistance = new JSpinner(
+                new SpinnerNumberModel(current.getMaxAssociationDistancePixels(), 1.0, 100000.0, 1.0));
+        JSpinner mog2History = new JSpinner(new SpinnerNumberModel(current.getMog2HistoryFrames(), 1, 10000, 10));
+        JSpinner mog2VarThreshold = new JSpinner(new SpinnerNumberModel(current.getMog2VarThreshold(), 0.01, 1000.0, 0.5));
+        JCheckBox detectShadows = new JCheckBox("Enable");
+        detectShadows.setSelected(current.isMog2DetectShadows());
+        JSpinner morphologyKernelSize = new JSpinner(new SpinnerNumberModel(current.getMorphologyKernelSize(), 1, 99, 2));
+        JSpinner morphologyOpenIterations = new JSpinner(new SpinnerNumberModel(current.getMorphologyOpenIterations(), 0, 20, 1));
+        JSpinner morphologyDilateIterations = new JSpinner(new SpinnerNumberModel(current.getMorphologyDilateIterations(), 0, 20, 1));
+        JSpinner normalizedMaskThreshold = new JSpinner(
+                new SpinnerNumberModel(current.getNormalizedMaskThreshold(), 0.0, 255.0, 1.0));
+
+        styleConfigSpinner(maxFramesDisappeared);
+        styleConfigSpinner(minContourArea);
+        styleConfigSpinner(maxRectCircumference);
+        styleConfigSpinner(maxVerticalDisplacement);
+        styleConfigSpinner(minHorizontalMovement);
+        styleConfigSpinner(maxAssociationDistance);
+        styleConfigSpinner(mog2History);
+        styleConfigSpinner(mog2VarThreshold);
+        styleConfigSpinner(morphologyKernelSize);
+        styleConfigSpinner(morphologyOpenIterations);
+        styleConfigSpinner(morphologyDilateIterations);
+        styleConfigSpinner(normalizedMaskThreshold);
+        styleConfigCheckBox(detectShadows);
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setOpaque(false);
+        form.setBorder(new EmptyBorder(SPACE_XS, SPACE_XS, SPACE_XS, SPACE_XS));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.insets = new Insets(0, 0, SPACE_XS, SPACE_S);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        addConfigRow(form, gbc, "Max Frames Disappeared", maxFramesDisappeared);
+        addConfigRow(form, gbc, "Min Contour Area", minContourArea);
+        addConfigRow(form, gbc, "Max Rectangle Circumference", maxRectCircumference);
+        addConfigRow(form, gbc, "Max Vertical Displacement (px)", maxVerticalDisplacement);
+        addConfigRow(form, gbc, "Min Horizontal Movement (px)", minHorizontalMovement);
+        addConfigRow(form, gbc, "Max Association Distance (px)", maxAssociationDistance);
+        addConfigRow(form, gbc, "MOG2 History Frames", mog2History);
+        addConfigRow(form, gbc, "MOG2 Variance Threshold", mog2VarThreshold);
+        addConfigRow(form, gbc, "MOG2 Detect Shadows", detectShadows);
+        addConfigRow(form, gbc, "Morphology Kernel Size (odd)", morphologyKernelSize);
+        addConfigRow(form, gbc, "Morphology Open Iterations", morphologyOpenIterations);
+        addConfigRow(form, gbc, "Morphology Dilate Iterations", morphologyDilateIterations);
+        addConfigRow(form, gbc, "Mask Threshold (0-255)", normalizedMaskThreshold);
+
+        JScrollPane scrollPane = new JScrollPane(form);
+        scrollPane.setBorder(new LineBorder(new Color(82, 129, 193, 140), 1, true));
+        scrollPane.setPreferredSize(new Dimension(550, 420));
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getViewport().setOpaque(true);
+        scrollPane.getViewport().setBackground(new Color(8, 23, 52));
+        scrollPane.setOpaque(false);
+
+        CardPanel dialogCard = createCard("Tracking Configuration", "Tune detection, tracking, and preprocessing metrics");
+        dialogCard.add(scrollPane, BorderLayout.CENTER);
+
+        JButton cancelButton = createSecondaryButton("Cancel", null);
+        JButton applyButton = createPrimaryButton("Apply", null);
+        enforceButtonSize(cancelButton, 110);
+        enforceButtonSize(applyButton, 110);
+
+        JPanel actionRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, SPACE_XS, 0));
+        actionRow.setOpaque(false);
+        actionRow.add(cancelButton);
+        actionRow.add(applyButton);
+
+        GradientPanel root = new GradientPanel();
+        root.setLayout(new BorderLayout(SPACE_M, SPACE_M));
+        root.setBorder(new EmptyBorder(SPACE_M, SPACE_M, SPACE_M, SPACE_M));
+        root.add(dialogCard, BorderLayout.CENTER);
+        root.add(actionRow, BorderLayout.SOUTH);
+
+        TrackingConfiguration[] result = new TrackingConfiguration[1];
+        JDialog dialog = new JDialog(this, "Tracking Configuration", true);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setContentPane(root);
+        dialog.setSize(640, 640);
+        dialog.setMinimumSize(new Dimension(620, 580));
+        dialog.setLocationRelativeTo(this);
+
+        applyButton.addActionListener(e -> {
+            result[0] = new TrackingConfiguration(
+                    ((Number) maxFramesDisappeared.getValue()).intValue(),
+                    ((Number) minContourArea.getValue()).doubleValue(),
+                    ((Number) maxRectCircumference.getValue()).doubleValue(),
+                    ((Number) maxVerticalDisplacement.getValue()).doubleValue(),
+                    ((Number) minHorizontalMovement.getValue()).doubleValue(),
+                    ((Number) maxAssociationDistance.getValue()).doubleValue(),
+                    ((Number) mog2History.getValue()).intValue(),
+                    ((Number) mog2VarThreshold.getValue()).doubleValue(),
+                    detectShadows.isSelected(),
+                    ((Number) morphologyKernelSize.getValue()).intValue(),
+                    ((Number) morphologyOpenIterations.getValue()).intValue(),
+                    ((Number) morphologyDilateIterations.getValue()).intValue(),
+                    ((Number) normalizedMaskThreshold.getValue()).doubleValue()).normalized();
+            dialog.dispose();
+        });
+        cancelButton.addActionListener(e -> dialog.dispose());
+
+        dialog.getRootPane().setDefaultButton(applyButton);
+        dialog.getRootPane().registerKeyboardAction(
+                e -> dialog.dispose(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
+        dialog.setVisible(true);
+        return result[0];
+    }
+
+    private void addConfigRow(JPanel form, GridBagConstraints gbc, String labelText, JComponent field) {
+        JLabel label = new JLabel(labelText);
+        label.setFont(FONT_BODY);
+        label.setForeground(TEXT_PRIMARY);
+
+        gbc.gridx = 0;
+        gbc.weightx = 0.54;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        form.add(label, gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.46;
+        form.add(field, gbc);
+
+        gbc.gridy++;
+    }
+
+    private void styleConfigSpinner(JSpinner spinner) {
+        Font valueFont = FONT_BODY.deriveFont(Font.BOLD, FONT_BODY.getSize2D());
+        spinner.setFont(valueFont);
+        spinner.setPreferredSize(new Dimension(170, 30));
+        spinner.setBackground(Color.WHITE);
+        spinner.setForeground(Color.BLACK);
+        spinner.setBorder(new RoundedBorder(new Color(100, 147, 214, 150), 10));
+
+        JComponent editor = spinner.getEditor();
+        if (editor instanceof JSpinner.DefaultEditor) {
+            JTextField textField = ((JSpinner.DefaultEditor) editor).getTextField();
+            textField.setFont(valueFont);
+            textField.setBackground(Color.WHITE);
+            textField.setForeground(Color.BLACK);
+            textField.setCaretColor(Color.BLACK);
+            textField.setDisabledTextColor(Color.BLACK);
+            textField.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
+        }
+    }
+
+    private void styleConfigCheckBox(JCheckBox checkBox) {
+        checkBox.setOpaque(false);
+        checkBox.setForeground(TEXT_PRIMARY);
+        checkBox.setFont(FONT_BODY);
+        checkBox.setFocusPainted(false);
     }
 
     private ChartPanel createCombinedChart(double[] data, String title, String xAxisLabel, String yAxisLabel, double binSize) {
@@ -1011,7 +1228,8 @@ public class CellCounterGUI extends JFrame {
             RESET,
             EYE,
             FILE,
-            GRID
+            GRID,
+            SETTINGS
         }
 
         private final Kind kind;
@@ -1094,6 +1312,14 @@ public class CellCounterGUI extends JFrame {
                     g2.drawLine(9, 1, 9, 13);
                     g2.drawLine(1, 5, 13, 5);
                     g2.drawLine(1, 9, 13, 9);
+                }
+                case SETTINGS -> {
+                    g2.drawOval(2, 2, 10, 10);
+                    g2.fillOval(5, 5, 4, 4);
+                    g2.drawLine(7, 0, 7, 2);
+                    g2.drawLine(7, 12, 7, 14);
+                    g2.drawLine(0, 7, 2, 7);
+                    g2.drawLine(12, 7, 14, 7);
                 }
                 default -> {
                 }

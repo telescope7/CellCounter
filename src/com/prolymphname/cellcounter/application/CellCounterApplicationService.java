@@ -3,6 +3,7 @@ package com.prolymphname.cellcounter.application;
 import com.prolymphname.cellcounter.export.AnalysisExportService;
 import com.prolymphname.cellcounter.export.ExportMetadata;
 import com.prolymphname.cellcounter.trackingadapter.AnalysisLogicTrackingAdapter;
+import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import com.prolymphname.cellcounter.trackingadapter.TrackingAdapter;
 import org.opencv.core.Mat;
 
@@ -81,6 +82,14 @@ public class CellCounterApplicationService {
 
     public void setReferenceFrameForDiff(Mat frame) {
         trackingAdapter.setReferenceFrameForDiff(frame);
+    }
+
+    public TrackingConfiguration getTrackingConfiguration() {
+        return trackingAdapter.getTrackingConfiguration();
+    }
+
+    public void setTrackingConfiguration(TrackingConfiguration trackingConfiguration) {
+        trackingAdapter.setTrackingConfiguration(trackingConfiguration);
     }
 
     public void saveAnalysisCsv(File file, ExportMetadata metadata) throws IOException {
