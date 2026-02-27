@@ -1,6 +1,6 @@
 package com.prolymphname.cellcounter.simulation;
 
-import org.opencv.core.Core;
+import com.prolymphname.cellcounter.OpenCvSupport;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -307,7 +307,7 @@ public class CellSimulationGUI extends JFrame {
     }
 
     public static void main(String[] args) {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        OpenCvSupport.loadOpenCv();
         SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true));
     }
 

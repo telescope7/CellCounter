@@ -1,0 +1,5 @@
+./run-ground-truth-eval.sh \
+  --video=/Users/mthomas/eclipse-workspace/CellCounter/simcell.avi \
+  --truth-events=/Users/mthomas/eclipse-workspace/CellCounter/simcell_events.csv \
+  --output-prefix=/tmp/eval_run \
+  --tracking-config=/Users/mthomas/eclipse-workspace/CellCounter/tracking-config.example.properties

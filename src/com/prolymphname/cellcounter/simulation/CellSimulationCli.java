@@ -1,6 +1,6 @@
 package com.prolymphname.cellcounter.simulation;
 
-import org.opencv.core.Core;
+import com.prolymphname.cellcounter.OpenCvSupport;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -11,7 +11,7 @@ public final class CellSimulationCli {
     }
 
     public static void main(String[] args) throws Exception {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        OpenCvSupport.loadOpenCv();
 
         Map<String, String> options = parseOptions(args);
         CellSimulationParameters defaults = CellSimulationParameters.defaults();

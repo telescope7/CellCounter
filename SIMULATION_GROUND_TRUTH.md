@@ -54,3 +54,24 @@ Use either:
    - `mvn -DskipTests exec:java -Dexec.mainClass=com.prolymphname.cellcounter.simulation.CellSimulationCli -Dexec.args="--outputBase=simcell --outputDir=/tmp --seed=42"`
 
 If OpenCV native library loading fails at runtime, configure your local Java/OpenCV native library path the same way you do for `CellCounterApp`.
+
+## Automated Evaluation CLI
+
+Run end-to-end evaluation against a generated truth set:
+
+```bash
+mvn -DskipTests exec:java \
+  -Dexec.mainClass=com.prolymphname.cellcounter.evaluation.GroundTruthEvaluationCli \
+  -Dexec.args="--video=/path/to/simcell.avi --truth-events=/path/to/simcell_events.csv --output-prefix=/tmp/eval_run --tracking-config=/path/to/tracking-config.properties"
+```
+
+Outputs:
+- CellCounter analysis CSV at `<output-prefix>_analysis.csv`
+- CellCounter footprint CSV at `<output-prefix>_footprint.csv`
+- Evaluation metrics CSV at `<output-prefix>_evaluation_metrics.csv`
+
+Reported minimal metric set:
+- `F1`
+- `W1_time (sec)`
+- `W1_velocity (px/sec)`
+- `MAE_velocity (px/sec)`

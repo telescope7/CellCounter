@@ -2,7 +2,6 @@ package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
-import org.opencv.core.Core;
 
 import javax.swing.*;
 import java.io.IOException;
@@ -20,7 +19,7 @@ public final class CellCounterApp {
     }
 
     public static void main(String[] args) {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        OpenCvSupport.loadOpenCv();
         if (args.length > 0) {
             runHeadless(args);
             return;
