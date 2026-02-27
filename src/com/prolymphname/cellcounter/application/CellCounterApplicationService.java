@@ -40,6 +40,10 @@ public class CellCounterApplicationService {
         return trackingAdapter.processNextFrameForAnalysis();
     }
 
+    public Mat seekToFrameForGUI(int targetFrameIndex) {
+        return trackingAdapter.seekToFrameForGUI(targetFrameIndex);
+    }
+
     public void releaseVideo() {
         trackingAdapter.releaseVideo();
     }
@@ -90,6 +94,10 @@ public class CellCounterApplicationService {
 
     public void setTrackingConfiguration(TrackingConfiguration trackingConfiguration) {
         trackingAdapter.setTrackingConfiguration(trackingConfiguration);
+    }
+
+    public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
+        return trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, showMaskView);
     }
 
     public void saveAnalysisCsv(File file, ExportMetadata metadata) throws IOException {

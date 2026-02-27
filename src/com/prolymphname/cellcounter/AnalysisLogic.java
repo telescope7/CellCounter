@@ -475,6 +475,53 @@ public class AnalysisLogic {
 		return this.lastProcessedFrame;
 	}
 
+	public Mat seekToFrameForGUI(int targetFrameIndex) {
+		if (!this.videoSuccessfullyInitialized || this.cap == null || !this.cap.isOpened()) {
+			return null;
+		}
+
+		int frameCount = getFrameCount();
+		int lastFrameIndex = Math.max(0, frameCount - 1);
+		int target = Math.max(0, Math.min(targetFrameIndex, lastFrameIndex));
+
+		this.cap.set(Videoio.CAP_PROP_POS_FRAMES, 0);
+		this.frameNumber = 0;
+		rebuildTrackingPipeline();
+		this.trackStartTimes.clear();
+		this.speeds.clear();
+
+		if (this.lastForegroundMaskForDisplay != null) {
+			this.lastForegroundMaskForDisplay.release();
+			this.lastForegroundMaskForDisplay = null;
+		}
+
+		Mat rawFrame = new Mat();
+		try {
+			for (int i = 0; i <= target; i++) {
+				if (!this.cap.read(rawFrame) || rawFrame.empty()) {
+					this.captureActive = false;
+					break;
+				}
+				this.frameNumber++;
+
+				if (this.currentRawFrameForDisplay != null) {
+					this.currentRawFrameForDisplay.release();
+				}
+				this.currentRawFrameForDisplay = rawFrame.clone();
+
+				if (this.lastProcessedFrame != null) {
+					this.lastProcessedFrame.release();
+				}
+				this.lastProcessedFrame = processFrame(rawFrame, true);
+			}
+		} finally {
+			rawFrame.release();
+		}
+
+		this.captureActive = this.cap.isOpened() && this.frameNumber < frameCount;
+		return this.lastProcessedFrame;
+	}
+
 	public void releaseVideo() {
 		if (this.cap != null && this.cap.isOpened()) {
 			this.cap.release();
@@ -632,6 +679,136 @@ public class AnalysisLogic {
 		Mat displayImage = generateDisplayFromState(frameInput, this.displayMOG2Foreground, fgmask);
 		fgmask.release();
 		return displayImage;
+	}
+
+	public Mat previewCurrentFrameForTuning(TrackingConfiguration previewConfiguration, boolean showMaskView) {
+		if (!videoSuccessfullyInitialized || videoFilename == null || videoFilename.isBlank()) {
+			return null;
+		}
+
+		TrackingConfiguration cfg = (previewConfiguration == null ? trackingConfiguration : previewConfiguration).normalized();
+		int targetFrameIndex = frameNumber <= 0 ? 0 : frameNumber - 1;
+		int warmupFrames = Math.max(30, cfg.getMog2HistoryFrames());
+		int startFrameIndex = Math.max(0, targetFrameIndex - warmupFrames);
+
+		VideoCapture previewCap = new VideoCapture(videoFilename);
+		if (!previewCap.isOpened()) {
+			previewCap.release();
+			return null;
+		}
+
+		BackgroundSubtractorMOG2 previewSubtractor = Video.createBackgroundSubtractorMOG2(
+				cfg.getMog2HistoryFrames(),
+				cfg.getMog2VarThreshold(),
+				cfg.isMog2DetectShadows());
+
+		Mat frame = new Mat();
+		Mat fgmask = new Mat();
+		Mat previewDisplay = null;
+
+		try {
+			if (startFrameIndex > 0) {
+				previewCap.set(Videoio.CAP_PROP_POS_FRAMES, startFrameIndex);
+			}
+
+			int frameIndex = startFrameIndex;
+			while (frameIndex <= targetFrameIndex && previewCap.read(frame)) {
+				if (frame.empty()) {
+					frameIndex++;
+					continue;
+				}
+
+				List<Rect> previewRects = detectRectsForPreview(frame, fgmask, cfg, previewSubtractor);
+				if (frameIndex == targetFrameIndex) {
+					previewDisplay = renderPreviewDisplay(frame, fgmask, previewRects, showMaskView);
+				}
+				frameIndex++;
+			}
+
+			if (previewDisplay == null && currentRawFrameForDisplay != null && !currentRawFrameForDisplay.empty()) {
+				List<Rect> previewRects = detectRectsForPreview(currentRawFrameForDisplay, fgmask, cfg, previewSubtractor);
+				previewDisplay = renderPreviewDisplay(currentRawFrameForDisplay, fgmask, previewRects, showMaskView);
+			}
+		} finally {
+			frame.release();
+			fgmask.release();
+			previewCap.release();
+		}
+
+		return previewDisplay;
+	}
+
+	private List<Rect> detectRectsForPreview(
+			Mat frameInput,
+			Mat fgmaskOut,
+			TrackingConfiguration cfg,
+			BackgroundSubtractorMOG2 subtractor) {
+		Mat sourceForBGS = frameInput;
+		if (referenceFrame != null && !referenceFrame.empty()) {
+			Mat diff = new Mat();
+			Core.absdiff(frameInput, referenceFrame, diff);
+			sourceForBGS = diff;
+		}
+		subtractor.apply(sourceForBGS, fgmaskOut);
+		if (sourceForBGS != frameInput) {
+			sourceForBGS.release();
+		}
+
+		int kernelSize = cfg.getMorphologyKernelSize();
+		Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(kernelSize, kernelSize));
+		Imgproc.morphologyEx(fgmaskOut, fgmaskOut, Imgproc.MORPH_OPEN, kernel, new Point(-1, -1),
+				cfg.getMorphologyOpenIterations());
+		Imgproc.morphologyEx(fgmaskOut, fgmaskOut, Imgproc.MORPH_DILATE, kernel, new Point(-1, -1),
+				cfg.getMorphologyDilateIterations());
+		kernel.release();
+
+		Mat contourMask = fgmaskOut.clone();
+		Mat hierarchy = new Mat();
+		List<MatOfPoint> contours = new ArrayList<>();
+		Imgproc.findContours(contourMask, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+		contourMask.release();
+		hierarchy.release();
+
+		Core.normalize(fgmaskOut, fgmaskOut, 0, 255, Core.NORM_MINMAX);
+		Imgproc.threshold(fgmaskOut, fgmaskOut, cfg.getNormalizedMaskThreshold(), 255, Imgproc.THRESH_BINARY);
+
+		List<Rect> rects = new ArrayList<>();
+		for (MatOfPoint contour : contours) {
+			if (Imgproc.contourArea(contour) < cfg.getMinContourArea()) {
+				contour.release();
+				continue;
+			}
+
+			Rect rect = Imgproc.boundingRect(contour);
+			double circumference = 2 * (rect.width + rect.height);
+			if (circumference <= cfg.getMaxRectCircumference()) {
+				rects.add(rect);
+			}
+			contour.release();
+		}
+		contours.clear();
+		return rects;
+	}
+
+	private Mat renderPreviewDisplay(Mat sourceFrame, Mat fgmask, List<Rect> rects, boolean showMaskView) {
+		Mat display;
+		if (showMaskView) {
+			display = new Mat();
+			Imgproc.cvtColor(fgmask, display, Imgproc.COLOR_GRAY2BGR);
+		} else {
+			display = sourceFrame.clone();
+		}
+
+		Scalar detectionColor = new Scalar(58, 233, 197);
+		for (Rect rect : rects) {
+			Imgproc.rectangle(display, rect.tl(), rect.br(), detectionColor, 1);
+			Point centroid = new Point(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+			Imgproc.circle(display, centroid, 2, detectionColor, 1);
+		}
+
+		Imgproc.putText(display, "Preview detections: " + rects.size(),
+				new Point(12, 24), Imgproc.FONT_HERSHEY_SIMPLEX, 0.6, detectionColor, 2);
+		return display;
 	}
 // } // End of AnalysisLogic class
 

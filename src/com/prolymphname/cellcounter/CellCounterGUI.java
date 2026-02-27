@@ -37,6 +37,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class CellCounterGUI extends JFrame {
     private static final long serialVersionUID = 1L;
@@ -97,8 +99,13 @@ public class CellCounterGUI extends JFrame {
     private JButton saveFootprintButton;
     private JButton simulatorButton;
     private JButton configurationButton;
+    private JButton tuneDetectionButton;
     private JToggleButton mog2ViewButton;
     private JSlider playbackRateSlider;
+    private JSlider videoPositionSlider;
+    private JLabel videoPositionValueLabel;
+    private boolean suppressVideoPositionEvents = false;
+    private SwingWorker<Mat, Void> seekWorker;
 
     private Timer videoTimer;
 
@@ -266,6 +273,33 @@ public class CellCounterGUI extends JFrame {
 
     private JPanel buildVideoCard() {
         CardPanel videoCard = createCard("Video Card", "High-fidelity live field rendering");
+        tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
+        tuneDetectionButton.setFont(FONT_LABEL);
+        enforceButtonSize(tuneDetectionButton, 152);
+        videoPositionSlider = new JSlider(0, 0, 0);
+        videoPositionSlider.setOpaque(false);
+        videoPositionSlider.setPreferredSize(new Dimension(220, 28));
+        videoPositionSlider.setMaximumSize(new Dimension(220, 28));
+        videoPositionValueLabel = createChipLabel("0/0", CHIP_IDLE);
+        videoPositionValueLabel.setFont(FONT_LABEL);
+        videoPositionValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
+        videoPositionValueLabel.setPreferredSize(new Dimension(90, 24));
+
+        BorderLayout layout = (BorderLayout) videoCard.getLayout();
+        Component heading = layout.getLayoutComponent(BorderLayout.NORTH);
+        if (heading != null) {
+            videoCard.remove(heading);
+            JPanel topRow = new JPanel(new BorderLayout(SPACE_S, SPACE_S));
+            topRow.setOpaque(false);
+            topRow.add(heading, BorderLayout.WEST);
+            JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, SPACE_XS, 0));
+            rightActions.setOpaque(false);
+            rightActions.add(videoPositionValueLabel);
+            rightActions.add(videoPositionSlider);
+            rightActions.add(tuneDetectionButton);
+            topRow.add(rightActions, BorderLayout.EAST);
+            videoCard.add(topRow, BorderLayout.NORTH);
+        }
 
         videoLabel = new JLabel("No video loaded. Click Analyze to begin.", SwingConstants.CENTER);
         videoLabel.setFont(FONT_BODY);
@@ -307,6 +341,7 @@ public class CellCounterGUI extends JFrame {
     private void bindActions() {
         simulatorButton.addActionListener(e -> SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true)));
         configurationButton.addActionListener(e -> handleConfigureTracking());
+        tuneDetectionButton.addActionListener(e -> handleTuneDetection());
         analyzeButton.addActionListener(e -> handleAnalyzeVideo());
         playButton.addActionListener(e -> handlePlayPauseToggle());
         frameForwardButton.addActionListener(e -> handleFrameForward());
@@ -316,11 +351,13 @@ public class CellCounterGUI extends JFrame {
         saveFootprintButton.addActionListener(e -> handleSaveFootprintData());
         mog2ViewButton.addItemListener(this::handleMOG2Toggle);
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
+        videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
     }
 
     private void setInitialControlState() {
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
         playbackRateValueLabel.setText(String.format("%.1fx", DEFAULT_VIDEO_RATE));
+        refreshVideoPositionControls();
     }
 
     private void handleConfigureTracking() {
@@ -348,8 +385,10 @@ public class CellCounterGUI extends JFrame {
                 videoLabel.setText(null);
             }
             updateCharts();
+            refreshVideoPositionControls();
             setPipelineState("Configured", CHIP_ACTIVE);
         } else {
+            refreshVideoPositionControls();
             setPipelineState("Idle", CHIP_IDLE);
         }
 
@@ -357,6 +396,331 @@ public class CellCounterGUI extends JFrame {
                 ? "Tracking configuration applied. Playback was paused and reset to frame 1."
                 : "Tracking configuration applied.";
         JOptionPane.showMessageDialog(this, message, "Configuration", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void handleTuneDetection() {
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            JOptionPane.showMessageDialog(this,
+                    "Load a video first. The tuner previews segmentation on the current paused frame.",
+                    "No Video",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (videoPlaying && !paused) {
+            videoTimer.stop();
+            videoPlaying = false;
+            paused = true;
+            setPlayButtonPlaying(false);
+            setPipelineState("Paused", CHIP_WARNING);
+        }
+        openDetectionTunerDialog();
+    }
+
+    private void openDetectionTunerDialog() {
+        TrackingConfiguration[] appliedConfig = new TrackingConfiguration[] { appService.getTrackingConfiguration() };
+
+        JSlider mog2HistorySlider = createTuningSlider(30, 1200,
+                clampInt(appliedConfig[0].getMog2HistoryFrames(), 30, 1200));
+        JSlider mog2VarThresholdSlider = createTuningSlider(1, 200,
+                clampInt((int) Math.round(appliedConfig[0].getMog2VarThreshold()), 1, 200));
+        JSlider maskThresholdSlider = createTuningSlider(0, 255,
+                clampInt((int) Math.round(appliedConfig[0].getNormalizedMaskThreshold()), 0, 255));
+        JSlider minContourAreaSlider = createTuningSlider(0, 600,
+                clampInt((int) Math.round(appliedConfig[0].getMinContourArea()), 0, 600));
+        JSlider maxRectCircumferenceSlider = createTuningSlider(20, 500,
+                clampInt((int) Math.round(appliedConfig[0].getMaxRectCircumference()), 20, 500));
+        JSlider morphologyKernelSlider = createTuningSlider(1, 15,
+                clampInt(appliedConfig[0].getMorphologyKernelSize(), 1, 15));
+        JSlider morphologyOpenSlider = createTuningSlider(0, 8,
+                clampInt(appliedConfig[0].getMorphologyOpenIterations(), 0, 8));
+        JSlider morphologyDilateSlider = createTuningSlider(0, 8,
+                clampInt(appliedConfig[0].getMorphologyDilateIterations(), 0, 8));
+        JSlider maxAssociationDistanceSlider = createTuningSlider(30, 350,
+                clampInt((int) Math.round(appliedConfig[0].getMaxAssociationDistancePixels()), 30, 350));
+
+        JCheckBox detectShadowsCheck = new JCheckBox("Enable MOG2 shadows");
+        detectShadowsCheck.setSelected(appliedConfig[0].isMog2DetectShadows());
+        styleConfigCheckBox(detectShadowsCheck);
+
+        JCheckBox maskPreviewCheck = new JCheckBox("Preview mask view");
+        maskPreviewCheck.setSelected(true);
+        styleConfigCheckBox(maskPreviewCheck);
+
+        JLabel historyValue = createTuningValueChip(mog2HistorySlider.getValue() + " f");
+        JLabel varValue = createTuningValueChip(String.valueOf(mog2VarThresholdSlider.getValue()));
+        JLabel thresholdValue = createTuningValueChip(maskThresholdSlider.getValue() + " px");
+        JLabel contourValue = createTuningValueChip(minContourAreaSlider.getValue() + " px2");
+        JLabel rectValue = createTuningValueChip(maxRectCircumferenceSlider.getValue() + " px");
+        JLabel kernelValue = createTuningValueChip(toOdd(morphologyKernelSlider.getValue()) + " px");
+        JLabel openValue = createTuningValueChip(String.valueOf(morphologyOpenSlider.getValue()));
+        JLabel dilateValue = createTuningValueChip(String.valueOf(morphologyDilateSlider.getValue()));
+        JLabel associationValue = createTuningValueChip(maxAssociationDistanceSlider.getValue() + " px");
+
+        JLabel statusLabel = new JLabel("Adjust sliders and release to preview on the current frame.");
+        statusLabel.setFont(FONT_BODY);
+        statusLabel.setForeground(TEXT_SECONDARY);
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setOpaque(false);
+        form.setBorder(new EmptyBorder(SPACE_XS, SPACE_XS, SPACE_XS, SPACE_XS));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(0, 0, SPACE_XS, 0);
+
+        addTuningRow(form, gbc, "MOG2 History", mog2HistorySlider, historyValue);
+        addTuningRow(form, gbc, "MOG2 Variance Threshold", mog2VarThresholdSlider, varValue);
+        addTuningRow(form, gbc, "Mask Threshold", maskThresholdSlider, thresholdValue);
+        addTuningRow(form, gbc, "Min Contour Area", minContourAreaSlider, contourValue);
+        addTuningRow(form, gbc, "Max Rectangle Circumference", maxRectCircumferenceSlider, rectValue);
+        addTuningRow(form, gbc, "Morphology Kernel (odd)", morphologyKernelSlider, kernelValue);
+        addTuningRow(form, gbc, "Morphology Open Iterations", morphologyOpenSlider, openValue);
+        addTuningRow(form, gbc, "Morphology Dilate Iterations", morphologyDilateSlider, dilateValue);
+        addTuningRow(form, gbc, "Max Association Distance", maxAssociationDistanceSlider, associationValue);
+        addTuningCheckboxRow(form, gbc, detectShadowsCheck);
+        addTuningCheckboxRow(form, gbc, maskPreviewCheck);
+
+        JScrollPane scrollPane = new JScrollPane(form);
+        scrollPane.setBorder(new LineBorder(new Color(82, 129, 193, 140), 1, true));
+        scrollPane.setPreferredSize(new Dimension(700, 420));
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getViewport().setOpaque(true);
+        scrollPane.getViewport().setBackground(new Color(8, 23, 52));
+        scrollPane.setOpaque(false);
+
+        CardPanel dialogCard = createCard("Detection Tuner", "Interactive segmentation preview for paused frame");
+        dialogCard.add(scrollPane, BorderLayout.CENTER);
+
+        JButton applyButton = createPrimaryButton("Apply Parameters", null);
+        JButton resetButton = createSecondaryButton("Reset Sliders", null);
+        JButton closeButton = createSecondaryButton("Close", null);
+        enforceButtonSize(applyButton, 168);
+        enforceButtonSize(resetButton, 142);
+        enforceButtonSize(closeButton, 110);
+
+        JPanel actionRow = new JPanel(new BorderLayout(SPACE_M, 0));
+        actionRow.setOpaque(false);
+        actionRow.add(statusLabel, BorderLayout.CENTER);
+        JPanel buttonRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, SPACE_XS, 0));
+        buttonRow.setOpaque(false);
+        buttonRow.add(resetButton);
+        buttonRow.add(closeButton);
+        buttonRow.add(applyButton);
+        actionRow.add(buttonRow, BorderLayout.EAST);
+
+        GradientPanel root = new GradientPanel();
+        root.setLayout(new BorderLayout(SPACE_M, SPACE_M));
+        root.setBorder(new EmptyBorder(SPACE_M, SPACE_M, SPACE_M, SPACE_M));
+        root.add(dialogCard, BorderLayout.CENTER);
+        root.add(actionRow, BorderLayout.SOUTH);
+
+        JDialog dialog = new JDialog(this, "Detection Tuner", false);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setContentPane(root);
+        dialog.setSize(820, 640);
+        dialog.setMinimumSize(new Dimension(780, 580));
+        dialog.setLocationRelativeTo(this);
+
+        final boolean[] suppressPreview = new boolean[] { false };
+
+        java.util.List<JSlider> previewSliders = java.util.List.of(
+                mog2HistorySlider,
+                mog2VarThresholdSlider,
+                maskThresholdSlider,
+                minContourAreaSlider,
+                maxRectCircumferenceSlider,
+                morphologyKernelSlider,
+                morphologyOpenSlider,
+                morphologyDilateSlider,
+                maxAssociationDistanceSlider);
+
+        Consumer<Boolean> setTunerParameterInputsEnabled = enabled -> {
+            for (JSlider slider : previewSliders) {
+                slider.setEnabled(enabled);
+            }
+            detectShadowsCheck.setEnabled(enabled);
+            maskPreviewCheck.setEnabled(enabled);
+            applyButton.setEnabled(enabled);
+            resetButton.setEnabled(enabled);
+            closeButton.setEnabled(true);
+        };
+
+        Runnable updateValueLabels = () -> {
+            historyValue.setText(mog2HistorySlider.getValue() + " f");
+            varValue.setText(String.valueOf(mog2VarThresholdSlider.getValue()));
+            thresholdValue.setText(maskThresholdSlider.getValue() + " px");
+            contourValue.setText(minContourAreaSlider.getValue() + " px2");
+            rectValue.setText(maxRectCircumferenceSlider.getValue() + " px");
+            kernelValue.setText(toOdd(morphologyKernelSlider.getValue()) + " px");
+            openValue.setText(String.valueOf(morphologyOpenSlider.getValue()));
+            dilateValue.setText(String.valueOf(morphologyDilateSlider.getValue()));
+            associationValue.setText(maxAssociationDistanceSlider.getValue() + " px");
+        };
+
+        Runnable loadSlidersFromApplied = () -> {
+            suppressPreview[0] = true;
+            mog2HistorySlider.setValue(clampInt(appliedConfig[0].getMog2HistoryFrames(), 30, 1200));
+            mog2VarThresholdSlider.setValue(clampInt((int) Math.round(appliedConfig[0].getMog2VarThreshold()), 1, 200));
+            maskThresholdSlider.setValue(clampInt((int) Math.round(appliedConfig[0].getNormalizedMaskThreshold()), 0, 255));
+            minContourAreaSlider.setValue(clampInt((int) Math.round(appliedConfig[0].getMinContourArea()), 0, 600));
+            maxRectCircumferenceSlider.setValue(
+                    clampInt((int) Math.round(appliedConfig[0].getMaxRectCircumference()), 20, 500));
+            morphologyKernelSlider.setValue(clampInt(appliedConfig[0].getMorphologyKernelSize(), 1, 15));
+            morphologyOpenSlider.setValue(clampInt(appliedConfig[0].getMorphologyOpenIterations(), 0, 8));
+            morphologyDilateSlider.setValue(clampInt(appliedConfig[0].getMorphologyDilateIterations(), 0, 8));
+            maxAssociationDistanceSlider.setValue(
+                    clampInt((int) Math.round(appliedConfig[0].getMaxAssociationDistancePixels()), 30, 350));
+            detectShadowsCheck.setSelected(appliedConfig[0].isMog2DetectShadows());
+            suppressPreview[0] = false;
+            updateValueLabels.run();
+        };
+
+        Supplier<TrackingConfiguration> buildWorkingConfig = () -> new TrackingConfiguration(
+                appliedConfig[0].getMaxFramesDisappeared(),
+                minContourAreaSlider.getValue(),
+                maxRectCircumferenceSlider.getValue(),
+                appliedConfig[0].getMaxVerticalDisplacementPixels(),
+                appliedConfig[0].getMinHorizontalMovementPixels(),
+                maxAssociationDistanceSlider.getValue(),
+                mog2HistorySlider.getValue(),
+                mog2VarThresholdSlider.getValue(),
+                detectShadowsCheck.isSelected(),
+                toOdd(morphologyKernelSlider.getValue()),
+                morphologyOpenSlider.getValue(),
+                morphologyDilateSlider.getValue(),
+                maskThresholdSlider.getValue()).normalized();
+
+        class PreviewRunner {
+            private SwingWorker<Mat, Void> worker;
+            private TrackingConfiguration queuedConfig;
+            private Boolean queuedMask;
+
+            void request(TrackingConfiguration cfg, boolean showMask) {
+                if (dialog == null || !dialog.isDisplayable()) {
+                    return;
+                }
+                if (worker != null && !worker.isDone()) {
+                    queuedConfig = cfg;
+                    queuedMask = showMask;
+                    return;
+                }
+                start(cfg, showMask);
+            }
+
+            private void start(TrackingConfiguration cfg, boolean showMask) {
+                statusLabel.setText("Rendering preview on current frame...");
+                setTunerParameterInputsEnabled.accept(false);
+                worker = new SwingWorker<>() {
+                    @Override
+                    protected Mat doInBackground() {
+                        return appService.previewCurrentFrameForTuning(cfg, showMask);
+                    }
+
+                    @Override
+                    protected void done() {
+                        try {
+                            Mat previewFrame = get();
+                            if (previewFrame != null && !previewFrame.empty()) {
+                                videoLabel.setIcon(new ImageIcon(matToBufferedImage(previewFrame)));
+                                videoLabel.setText(null);
+                                statusLabel.setText("Preview updated.");
+                                previewFrame.release();
+                            } else {
+                                statusLabel.setText("Preview unavailable for this frame.");
+                            }
+                        } catch (Exception ex) {
+                            statusLabel.setText("Preview error: " + ex.getMessage());
+                        } finally {
+                            if (queuedConfig != null && queuedMask != null) {
+                                TrackingConfiguration nextCfg = queuedConfig;
+                                boolean nextMask = queuedMask;
+                                queuedConfig = null;
+                                queuedMask = null;
+                                start(nextCfg, nextMask);
+                            } else {
+                                setTunerParameterInputsEnabled.accept(true);
+                            }
+                        }
+                    }
+                };
+                worker.execute();
+            }
+
+            void cancel() {
+                if (worker != null && !worker.isDone()) {
+                    worker.cancel(true);
+                }
+                queuedConfig = null;
+                queuedMask = null;
+                setTunerParameterInputsEnabled.accept(true);
+            }
+        }
+
+        PreviewRunner previewRunner = new PreviewRunner();
+
+        Runnable requestPreview = () -> {
+            if (suppressPreview[0]) {
+                return;
+            }
+            previewRunner.request(buildWorkingConfig.get(), maskPreviewCheck.isSelected());
+        };
+
+        for (JSlider slider : previewSliders) {
+            slider.addChangeListener(e -> {
+                if (suppressPreview[0]) {
+                    return;
+                }
+                updateValueLabels.run();
+                if (!slider.getValueIsAdjusting()) {
+                    requestPreview.run();
+                }
+            });
+        }
+        detectShadowsCheck.addActionListener(e -> requestPreview.run());
+        maskPreviewCheck.addActionListener(e -> requestPreview.run());
+
+        applyButton.addActionListener(e -> {
+            TrackingConfiguration updated = buildWorkingConfig.get();
+            appService.setTrackingConfiguration(updated);
+            appliedConfig[0] = updated;
+            mog2ViewButton.setSelected(false);
+            appService.setDisplayMOG2Foreground(false);
+            refreshCurrentVideoFrame();
+            updateCharts();
+            paused = true;
+            videoPlaying = false;
+            videoTimer.stop();
+            setPlayButtonPlaying(false);
+            setPipelineState("Configured", CHIP_ACTIVE);
+            statusLabel.setText("Parameters applied. Playback reset to frame 1.");
+        });
+
+        resetButton.addActionListener(e -> {
+            loadSlidersFromApplied.run();
+            requestPreview.run();
+        });
+
+        closeButton.addActionListener(e -> dialog.dispose());
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                previewRunner.cancel();
+                refreshCurrentVideoFrame();
+            }
+
+            @Override
+            public void windowClosed(WindowEvent e) {
+                previewRunner.cancel();
+                refreshCurrentVideoFrame();
+            }
+        });
+
+        updateValueLabels.run();
+        requestPreview.run();
+        dialog.setVisible(true);
     }
 
     private TrackingConfiguration promptForTrackingConfiguration(TrackingConfiguration current) {
@@ -524,6 +888,99 @@ public class CellCounterGUI extends JFrame {
         checkBox.setFocusPainted(false);
     }
 
+    private JSlider createTuningSlider(int min, int max, int value) {
+        JSlider slider = new JSlider(min, max, clampInt(value, min, max));
+        slider.setOpaque(false);
+        slider.setPaintTicks(false);
+        slider.setPaintLabels(false);
+        slider.setFont(FONT_LABEL);
+        return slider;
+    }
+
+    private JLabel createTuningValueChip(String text) {
+        JLabel chip = createChipLabel(text, ACCENT_DEEP);
+        chip.setFont(FONT_LABEL);
+        chip.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
+        chip.setPreferredSize(new Dimension(84, 24));
+        return chip;
+    }
+
+    private void addTuningRow(JPanel form, GridBagConstraints gbc, String labelText, JSlider slider, JLabel valueLabel) {
+        JPanel row = new JPanel(new BorderLayout(SPACE_XS, 0));
+        row.setOpaque(false);
+
+        JLabel label = new JLabel(labelText);
+        label.setFont(FONT_BODY);
+        label.setForeground(TEXT_PRIMARY);
+        label.setPreferredSize(new Dimension(220, 22));
+
+        row.add(label, BorderLayout.WEST);
+        row.add(slider, BorderLayout.CENTER);
+        row.add(valueLabel, BorderLayout.EAST);
+
+        form.add(row, gbc);
+        gbc.gridy++;
+    }
+
+    private void addTuningCheckboxRow(JPanel form, GridBagConstraints gbc, JCheckBox checkBox) {
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+        row.add(checkBox, BorderLayout.WEST);
+        form.add(row, gbc);
+        gbc.gridy++;
+    }
+
+    private void refreshCurrentVideoFrame() {
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            return;
+        }
+        Mat frame = appService.getLastProcessedFrame();
+        if (frame != null && !frame.empty()) {
+            videoLabel.setIcon(new ImageIcon(matToBufferedImage(frame)));
+            videoLabel.setText(null);
+            videoLabel.repaint();
+        }
+    }
+
+    private void refreshVideoPositionControls() {
+        if (videoPositionSlider == null || videoPositionValueLabel == null) {
+            return;
+        }
+
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            suppressVideoPositionEvents = true;
+            videoPositionSlider.setMinimum(0);
+            videoPositionSlider.setMaximum(0);
+            videoPositionSlider.setValue(0);
+            videoPositionSlider.setEnabled(false);
+            suppressVideoPositionEvents = false;
+            videoPositionValueLabel.setText("0/0");
+            return;
+        }
+
+        int total = Math.max(1, appService.getFrameCount());
+        int currentFrameIndex = Math.max(0, appService.getCurrentFrameNumber() - 1);
+        int current = clampInt(currentFrameIndex, 0, total - 1);
+
+        suppressVideoPositionEvents = true;
+        videoPositionSlider.setMinimum(0);
+        videoPositionSlider.setMaximum(total - 1);
+        videoPositionSlider.setValue(current);
+        videoPositionSlider.setEnabled(true);
+        suppressVideoPositionEvents = false;
+
+        videoPositionValueLabel.setText((current + 1) + "/" + total);
+    }
+
+    private int clampInt(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private int toOdd(int value) {
+        int normalized = Math.max(1, value);
+        return normalized % 2 == 0 ? normalized + 1 : normalized;
+    }
+
     private ChartPanel createCombinedChart(double[] data, String title, String xAxisLabel, String yAxisLabel, double binSize) {
         if (data == null || data.length == 0) {
             data = new double[] { 0 };
@@ -653,6 +1110,7 @@ public class CellCounterGUI extends JFrame {
                         "Display Error", JOptionPane.WARNING_MESSAGE);
             }
             updateCharts();
+            refreshVideoPositionControls();
             return;
         }
 
@@ -660,6 +1118,7 @@ public class CellCounterGUI extends JFrame {
         paused = false;
         setPlayButtonPlaying(false);
         setPipelineState("Idle", CHIP_IDLE);
+        refreshVideoPositionControls();
 
         JOptionPane.showMessageDialog(this, "Error opening or initializing video file.", "Error", JOptionPane.ERROR_MESSAGE);
         videoLabel.setIcon(null);
@@ -751,6 +1210,7 @@ public class CellCounterGUI extends JFrame {
 
         setPipelineState("Loaded", CHIP_ACTIVE);
         updateCharts();
+        refreshVideoPositionControls();
     }
 
     private void handlePlaybackRateChange() {
@@ -782,6 +1242,7 @@ public class CellCounterGUI extends JFrame {
         if (frame != null && !frame.empty()) {
             videoLabel.setIcon(new ImageIcon(matToBufferedImage(frame)));
             updateCharts();
+            refreshVideoPositionControls();
             return;
         }
 
@@ -791,6 +1252,7 @@ public class CellCounterGUI extends JFrame {
             paused = true;
             setPlayButtonPlaying(false);
             setPipelineState("Complete", CHIP_ACTIVE);
+            refreshVideoPositionControls();
             if (SwingUtilities.isEventDispatchThread()) {
                 JOptionPane.showMessageDialog(this, "End of video.", "Playback Finished", JOptionPane.INFORMATION_MESSAGE);
             }
@@ -803,6 +1265,7 @@ public class CellCounterGUI extends JFrame {
             paused = true;
             setPlayButtonPlaying(false);
             setPipelineState("Error", CHIP_WARNING);
+            refreshVideoPositionControls();
             if (SwingUtilities.isEventDispatchThread()) {
                 JOptionPane.showMessageDialog(this, "Error during video playback.", "Playback Error",
                         JOptionPane.ERROR_MESSAGE);
@@ -893,6 +1356,7 @@ public class CellCounterGUI extends JFrame {
                     videoLabel.setIcon(new ImageIcon(matToBufferedImage(finalFrame)));
                 }
                 updateCharts();
+                refreshVideoPositionControls();
                 setPipelineState("Loaded", CHIP_ACTIVE);
                 JOptionPane.showMessageDialog(CellCounterGUI.this, "Fast Analysis Complete.", "Done",
                         JOptionPane.INFORMATION_MESSAGE);
@@ -905,12 +1369,74 @@ public class CellCounterGUI extends JFrame {
     private void handleFrameForward() {
         if (appService.isVideoSuccessfullyInitialized() && paused && appService.isCaptureActive()) {
             updateFrame();
+            refreshVideoPositionControls();
             if (!appService.isCaptureActive()) {
                 setPlayButtonPlaying(false);
                 videoPlaying = false;
                 setPipelineState("Complete", CHIP_ACTIVE);
             }
         }
+    }
+
+    private void handleVideoPositionSliderChange() {
+        if (suppressVideoPositionEvents) {
+            return;
+        }
+
+        int selected = videoPositionSlider.getValue();
+        int total = Math.max(1, appService.getFrameCount());
+        videoPositionValueLabel.setText((selected + 1) + "/" + total);
+
+        if (videoPositionSlider.getValueIsAdjusting()) {
+            return;
+        }
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            return;
+        }
+        if (seekWorker != null && !seekWorker.isDone()) {
+            return;
+        }
+
+        videoTimer.stop();
+        videoPlaying = false;
+        paused = true;
+        setPlayButtonPlaying(false);
+        setPipelineState("Seeking", CHIP_WARNING);
+        setMainControlsEnabled(false);
+
+        final int targetFrame = selected;
+        seekWorker = new SwingWorker<>() {
+            @Override
+            protected Mat doInBackground() {
+                return appService.seekToFrameForGUI(targetFrame);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    Mat seekFrame = get();
+                    if (seekFrame != null && !seekFrame.empty()) {
+                        videoLabel.setIcon(new ImageIcon(matToBufferedImage(seekFrame)));
+                        videoLabel.setText(null);
+                        updateCharts();
+                        setPipelineState(appService.isCaptureActive() ? "Paused" : "Complete",
+                                appService.isCaptureActive() ? CHIP_WARNING : CHIP_ACTIVE);
+                    } else {
+                        setPipelineState("Error", CHIP_WARNING);
+                    }
+                } catch (Exception ex) {
+                    setPipelineState("Error", CHIP_WARNING);
+                    JOptionPane.showMessageDialog(CellCounterGUI.this,
+                            "Failed to seek video: " + ex.getMessage(),
+                            "Seek Error",
+                            JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    setMainControlsEnabled(true);
+                    refreshVideoPositionControls();
+                }
+            }
+        };
+        seekWorker.execute();
     }
 
     private void handleSaveAnalysis() {
@@ -986,6 +1512,48 @@ public class CellCounterGUI extends JFrame {
         pipelineStateLabel.setOpaque(true);
         pipelineStateLabel.setBackground(color);
         pipelineStateLabel.setForeground(Color.WHITE);
+    }
+
+    private void setMainControlsEnabled(boolean enabled) {
+        if (analyzeButton != null) {
+            analyzeButton.setEnabled(enabled);
+        }
+        if (fastButton != null) {
+            fastButton.setEnabled(enabled);
+        }
+        if (playButton != null) {
+            playButton.setEnabled(enabled);
+        }
+        if (frameForwardButton != null) {
+            frameForwardButton.setEnabled(enabled);
+        }
+        if (resetButton != null) {
+            resetButton.setEnabled(enabled);
+        }
+        if (mog2ViewButton != null) {
+            mog2ViewButton.setEnabled(enabled);
+        }
+        if (saveAnalysisButton != null) {
+            saveAnalysisButton.setEnabled(enabled);
+        }
+        if (saveFootprintButton != null) {
+            saveFootprintButton.setEnabled(enabled);
+        }
+        if (simulatorButton != null) {
+            simulatorButton.setEnabled(enabled);
+        }
+        if (configurationButton != null) {
+            configurationButton.setEnabled(enabled);
+        }
+        if (tuneDetectionButton != null) {
+            tuneDetectionButton.setEnabled(enabled);
+        }
+        if (playbackRateSlider != null) {
+            playbackRateSlider.setEnabled(enabled);
+        }
+        if (videoPositionSlider != null) {
+            videoPositionSlider.setEnabled(enabled);
+        }
     }
 
     private int rateToSlider(double rate) {
@@ -1239,7 +1807,8 @@ public class CellCounterGUI extends JFrame {
             FILE,
             GRID,
             SETTINGS,
-            SIMULATOR
+            SIMULATOR,
+            SLIDERS
         }
 
         private final Kind kind;
@@ -1338,6 +1907,14 @@ public class CellCounterGUI extends JFrame {
                     g2.drawLine(1, 5, 13, 5);
                     g2.drawLine(3, 7, 6, 7);
                     g2.drawLine(8, 7, 11, 7);
+                }
+                case SLIDERS -> {
+                    g2.drawLine(1, 3, 13, 3);
+                    g2.drawLine(1, 7, 13, 7);
+                    g2.drawLine(1, 11, 13, 11);
+                    g2.fillRoundRect(3, 1, 3, 4, 2, 2);
+                    g2.fillRoundRect(8, 5, 3, 4, 2, 2);
+                    g2.fillRoundRect(5, 9, 3, 4, 2, 2);
                 }
                 default -> {
                 }

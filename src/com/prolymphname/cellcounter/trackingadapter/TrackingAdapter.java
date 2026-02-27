@@ -15,6 +15,8 @@ public interface TrackingAdapter {
 
     Mat processNextFrameForAnalysis();
 
+    Mat seekToFrameForGUI(int targetFrameIndex);
+
     void releaseVideo();
 
     boolean isCaptureActive();
@@ -40,6 +42,8 @@ public interface TrackingAdapter {
     TrackingConfiguration getTrackingConfiguration();
 
     void setTrackingConfiguration(TrackingConfiguration trackingConfiguration);
+
+    Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView);
 
     AnalysisLogic.CentroidTracker getCellTracker();
 

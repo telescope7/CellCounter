@@ -38,6 +38,11 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
+    public Mat seekToFrameForGUI(int targetFrameIndex) {
+        return analysisLogic.seekToFrameForGUI(targetFrameIndex);
+    }
+
+    @Override
     public void releaseVideo() {
         analysisLogic.releaseVideo();
     }
@@ -100,6 +105,11 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     @Override
     public void setTrackingConfiguration(TrackingConfiguration trackingConfiguration) {
         analysisLogic.setTrackingConfiguration(trackingConfiguration);
+    }
+
+    @Override
+    public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
+        return analysisLogic.previewCurrentFrameForTuning(trackingConfiguration, showMaskView);
     }
 
     @Override
