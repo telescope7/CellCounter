@@ -1,0 +1,22 @@
+{
+  "schema": "cellcounter.simulation.groundtruth.v1",
+  "generated_at_utc": "2026-02-27T14:14:12.994860Z",
+  "video_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell.avi",
+  "legacy_csv_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell.csv",
+  "events_csv_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell_events.csv",
+  "trajectory_csv_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell_trajectory.csv",
+  "purpose": "Ground-truth generation for future automated comparison against CellCounter tracking outputs.",
+  "parameters": {
+    "width": 500,
+    "height": 500,
+    "cell_count": 300,
+    "delay_seconds": 15,
+    "fps": 30,
+    "length_seconds": 60,
+    "cell_radius_px": 7,
+    "base_velocity_px_per_frame": 7.000000,
+    "random_seed": 42,
+    "track_limit_fraction": 0.800000,
+    "total_frames": 1800
+  }
+}

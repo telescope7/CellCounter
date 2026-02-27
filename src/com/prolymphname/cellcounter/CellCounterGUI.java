@@ -2,6 +2,7 @@ package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.export.ExportMetadata;
+import com.prolymphname.cellcounter.simulation.CellSimulationGUI;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -94,6 +95,7 @@ public class CellCounterGUI extends JFrame {
     private JButton resetButton;
     private JButton saveAnalysisButton;
     private JButton saveFootprintButton;
+    private JButton simulatorButton;
     private JButton configurationButton;
     private JToggleButton mog2ViewButton;
     private JSlider playbackRateSlider;
@@ -182,6 +184,10 @@ public class CellCounterGUI extends JFrame {
         titleGroup.add(Box.createVerticalStrut(SPACE_XXS));
         titleGroup.add(subtitle);
 
+        simulatorButton = createSecondaryButton("Simulator", new AppIcon(AppIcon.Kind.SIMULATOR, Color.WHITE));
+        simulatorButton.setFont(FONT_LABEL);
+        enforceButtonSize(simulatorButton, 116);
+
         configurationButton = createSecondaryButton("Configuration", new AppIcon(AppIcon.Kind.SETTINGS, Color.WHITE));
         configurationButton.setFont(FONT_LABEL);
         enforceButtonSize(configurationButton, 134);
@@ -190,6 +196,8 @@ public class CellCounterGUI extends JFrame {
         JPanel statusGroup = new JPanel();
         statusGroup.setOpaque(false);
         statusGroup.setLayout(new BoxLayout(statusGroup, BoxLayout.X_AXIS));
+        statusGroup.add(simulatorButton);
+        statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
         statusGroup.add(configurationButton);
         statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
         statusGroup.add(pipelineStateLabel);
@@ -297,6 +305,7 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void bindActions() {
+        simulatorButton.addActionListener(e -> SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true)));
         configurationButton.addActionListener(e -> handleConfigureTracking());
         analyzeButton.addActionListener(e -> handleAnalyzeVideo());
         playButton.addActionListener(e -> handlePlayPauseToggle());
@@ -1229,7 +1238,8 @@ public class CellCounterGUI extends JFrame {
             EYE,
             FILE,
             GRID,
-            SETTINGS
+            SETTINGS,
+            SIMULATOR
         }
 
         private final Kind kind;
@@ -1320,6 +1330,14 @@ public class CellCounterGUI extends JFrame {
                     g2.drawLine(7, 12, 7, 14);
                     g2.drawLine(0, 7, 2, 7);
                     g2.drawLine(12, 7, 14, 7);
+                }
+                case SIMULATOR -> {
+                    g2.drawRoundRect(1, 2, 12, 10, 2, 2);
+                    g2.drawLine(3, 0, 3, 2);
+                    g2.drawLine(11, 0, 11, 2);
+                    g2.drawLine(1, 5, 13, 5);
+                    g2.drawLine(3, 7, 6, 7);
+                    g2.drawLine(8, 7, 11, 7);
                 }
                 default -> {
                 }
