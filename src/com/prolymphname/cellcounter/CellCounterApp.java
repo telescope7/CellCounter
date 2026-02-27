@@ -4,7 +4,6 @@ import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import org.opencv.core.Core;
 
 import javax.swing.*;
-import java.awt.*;
 
 public final class CellCounterApp {
     private CellCounterApp() {
@@ -19,7 +18,7 @@ public final class CellCounterApp {
             return;
         }
 
-        SwingUtilities.invokeLater(CellCounterApp::showSplashAndLaunchGui);
+        SwingUtilities.invokeLater(() -> new CellCounterGUI(new CellCounterApplicationService()).setVisible(true));
     }
 
     private static void runHeadless(String[] args) {
@@ -52,34 +51,4 @@ public final class CellCounterApp {
         }
     }
 
-    private static void showSplashAndLaunchGui() {
-        JWindow splash = new JWindow();
-        JPanel splashPanel = new JPanel(new BorderLayout());
-        splashPanel.setBackground(new Color(230, 230, 250));
-        splashPanel.setBorder(BorderFactory.createLineBorder(new Color(0, 0, 128), 2));
-        JLabel splashLabel = new JLabel("<html><center>Cell Counter<br/><i>Infiltrate Bio</i></center></html>",
-                SwingConstants.CENTER);
-        splashLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        splashLabel.setForeground(new Color(0, 0, 128));
-        splashPanel.add(splashLabel, BorderLayout.CENTER);
-        JProgressBar progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
-        splashPanel.add(progressBar, BorderLayout.SOUTH);
-        splash.getContentPane().add(splashPanel);
-        splash.setSize(400, 150);
-        splash.setLocationRelativeTo(null);
-        splash.setVisible(true);
-
-        new Timer(2000, ae -> {
-            splash.setVisible(false);
-            splash.dispose();
-            new CellCounterGUI(new CellCounterApplicationService()).setVisible(true);
-        }) {
-            private static final long serialVersionUID = -6312010934618202078L;
-
-            {
-                setRepeats(false);
-            }
-        }.start();
-    }
 }
