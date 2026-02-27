@@ -15,23 +15,30 @@ import java.util.Map;
 import java.util.Properties;
 
 public final class CellCounterApp {
+    private static final Path STARTUP_TRACKING_CONFIG_PATH = Path.of("CellCounter.properties");
+
     private CellCounterApp() {
     }
 
     public static void main(String[] args) {
         OpenCvSupport.loadOpenCv();
+        TrackingConfiguration startupDefaults = loadStartupTrackingConfiguration();
         if (args.length > 0) {
-            runHeadless(args);
+            runHeadless(args, startupDefaults);
             return;
         }
 
         configureLookAndFeel();
-        SwingUtilities.invokeLater(() -> new CellCounterGUI(new CellCounterApplicationService()).setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            CellCounterApplicationService appService = new CellCounterApplicationService();
+            appService.setTrackingConfiguration(startupDefaults);
+            new CellCounterGUI(appService).setVisible(true);
+        });
     }
 
-    private static void runHeadless(String[] args) {
+    private static void runHeadless(String[] args, TrackingConfiguration startupDefaults) {
         try {
-            HeadlessOptions options = HeadlessOptions.parse(args);
+            HeadlessOptions options = HeadlessOptions.parse(args, startupDefaults);
             CellCounterApplicationService appService = new CellCounterApplicationService();
             appService.setTrackingConfiguration(options.trackingConfiguration());
 
@@ -45,6 +52,37 @@ public final class CellCounterApp {
         } catch (IllegalArgumentException ex) {
             System.err.println("Invalid headless arguments: " + ex.getMessage());
             printHeadlessUsage();
+        }
+    }
+
+    private static TrackingConfiguration loadStartupTrackingConfiguration() {
+        TrackingConfigurationBuilder builder = new TrackingConfigurationBuilder(TrackingConfiguration.defaults());
+        if (!Files.exists(STARTUP_TRACKING_CONFIG_PATH)) {
+            System.err.println("Startup tracking config not found at "
+                    + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath()
+                    + "; using built-in defaults.");
+            return builder.build().normalized();
+        }
+
+        applyConfigFile(builder, STARTUP_TRACKING_CONFIG_PATH);
+        System.out.println("Loaded startup tracking defaults from " + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath());
+        return builder.build().normalized();
+    }
+
+    private static void applyConfigFile(TrackingConfigurationBuilder builder, Path filePath) {
+        if (!Files.exists(filePath)) {
+            throw new IllegalArgumentException("Tracking config file does not exist: " + filePath);
+        }
+        Properties properties = new Properties();
+        try (Reader reader = Files.newBufferedReader(filePath)) {
+            properties.load(reader);
+        } catch (IOException ex) {
+            throw new IllegalArgumentException(
+                    "Cannot read tracking config file: " + filePath + " (" + ex.getMessage() + ")");
+        }
+
+        for (String key : properties.stringPropertyNames()) {
+            builder.apply(key, properties.getProperty(key));
         }
     }
 
@@ -109,7 +147,7 @@ public final class CellCounterApp {
             String flow,
             TrackingConfiguration trackingConfiguration) {
 
-        private static HeadlessOptions parse(String[] args) {
+        private static HeadlessOptions parse(String[] args, TrackingConfiguration startupDefaults) {
             ParseResult parsed = parseArgs(args);
             List<String> positional = parsed.positional();
             Map<String, String> options = parsed.options();
@@ -140,10 +178,10 @@ public final class CellCounterApp {
                 flow = flowOpt;
             }
 
-            TrackingConfigurationBuilder builder = new TrackingConfigurationBuilder(TrackingConfiguration.defaults());
+            TrackingConfigurationBuilder builder = new TrackingConfigurationBuilder(startupDefaults);
             String configPathValue = findOption(options, "trackingConfig");
             if (configPathValue != null && !configPathValue.isBlank()) {
-                applyConfigFile(builder, Path.of(configPathValue.trim()));
+                CellCounterApp.applyConfigFile(builder, Path.of(configPathValue.trim()));
             }
             applyTrackingOptions(builder, options);
 
@@ -184,22 +222,6 @@ public final class CellCounterApp {
                 options.put(key, value);
             }
             return new ParseResult(positional, options);
-        }
-
-        private static void applyConfigFile(TrackingConfigurationBuilder builder, Path filePath) {
-            if (!Files.exists(filePath)) {
-                throw new IllegalArgumentException("Tracking config file does not exist: " + filePath);
-            }
-            Properties properties = new Properties();
-            try (Reader reader = Files.newBufferedReader(filePath)) {
-                properties.load(reader);
-            } catch (IOException ex) {
-                throw new IllegalArgumentException("Cannot read tracking config file: " + filePath + " (" + ex.getMessage() + ")");
-            }
-
-            for (String key : properties.stringPropertyNames()) {
-                builder.apply(key, properties.getProperty(key));
-            }
         }
 
         private static void applyTrackingOptions(TrackingConfigurationBuilder builder, Map<String, String> options) {

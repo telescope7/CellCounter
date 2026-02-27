@@ -75,3 +75,36 @@ Reported minimal metric set:
 - `W1_time (sec)`
 - `W1_velocity (px/sec)`
 - `MAE_velocity (px/sec)`
+
+## Genetic Algorithm Tuning CLI
+
+Use GA to tune tracking parameters against ground truth:
+
+```bash
+./run-ground-truth-ga.sh \
+  --video=/path/to/simcell.avi \
+  --truth-events=/path/to/simcell_events.csv \
+  --tracking-config=/path/to/tracking-config.example.properties \
+  --generations=8 \
+  --population=16 \
+  --mutation-rate=0.15 \
+  --output-dir=/tmp/ga_run
+```
+
+Required inputs:
+- `--tracking-config`: baseline/default configuration to start from.
+- `--generations`: number of GA generations.
+- `--population`: population pool size.
+- `--mutation-rate`: per-gene mutation probability (0.0 to 1.0).
+
+Runtime note:
+- One generation still evaluates the full population (`baseline + population` candidates).
+- For a quick sanity run, start with:
+  - `--generations=1 --population=2 --mutation-rate=0.1 --candidate-timeout-sec=30 --max-frames=600`
+
+Outputs:
+- `ga_best_tracking_config.properties`
+- `ga_history.csv`
+- `ga_report.txt`
+
+The report includes baseline score, best score, metric deltas, and the optimal configuration.
