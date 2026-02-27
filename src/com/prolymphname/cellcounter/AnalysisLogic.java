@@ -792,10 +792,6 @@ public class AnalysisLogic {
 		return lastProcessedFrame;
 	}
 
-	public List<Double> getCrossingTimes() {
-		return Collections.unmodifiableList(trackStartTimes);
-	}
-
 	public List<Double> getSpeeds() {
 		return Collections.unmodifiableList(speeds);
 	}
