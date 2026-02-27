@@ -62,7 +62,7 @@ Run end-to-end evaluation against a generated truth set:
 ```bash
 mvn -DskipTests exec:java \
   -Dexec.mainClass=com.prolymphname.cellcounter.evaluation.GroundTruthEvaluationCli \
-  -Dexec.args="--video=/path/to/simcell.avi --truth-events=/path/to/simcell_events.csv --output-prefix=/tmp/eval_run --tracking-config=/path/to/tracking-config.properties"
+  -Dexec.args="--video=/path/to/simcell.avi --truth-events=/path/to/simcell_events.csv --output-prefix=/tmp/eval_run --tracking-config=/path/to/tracking-config.properties --score-baseline-config=/path/to/baseline-config.properties"
 ```
 
 Outputs:
@@ -75,6 +75,9 @@ Reported minimal metric set:
 - `W1_time (sec)`
 - `W1_velocity (px/sec)`
 - `MAE_velocity (px/sec)`
+
+GA-compatible score:
+- Provide `--score-baseline-config` to compute the same score formula used by GA `bestScore`.
 
 ## Genetic Algorithm Tuning CLI
 
