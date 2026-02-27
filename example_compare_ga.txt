@@ -1,0 +1,2 @@
+./run-ground-truth-ga.sh --video=/Users/mthomas/eclipse-workspace/CellCounter/simcell.avi --truth-events=/Users/mthomas/eclipse-workspace/CellCounter/simcell_events.csv --tracking-config=/Users/mthomas/eclipse-workspace/CellCounter/tracking-config.example.properties --generations=10 --population=6 --mutation-rate=0.15 --candidate-timeout-sec=20 --output-dir=/tmp/ga_run
+
