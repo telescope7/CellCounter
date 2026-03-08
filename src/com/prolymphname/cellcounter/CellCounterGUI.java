@@ -95,8 +95,7 @@ public class CellCounterGUI extends JFrame {
     private JButton playButton;
     private JButton frameForwardButton;
     private JButton resetButton;
-    private JButton saveAnalysisButton;
-    private JButton saveFootprintButton;
+    private JButton saveResultsButton;
     private JButton simulatorButton;
     private JButton configurationButton;
     private JButton tuneDetectionButton;
@@ -111,6 +110,11 @@ public class CellCounterGUI extends JFrame {
 
     private final Icon playIcon = new AppIcon(AppIcon.Kind.PLAY, Color.WHITE);
     private final Icon pauseIcon = new AppIcon(AppIcon.Kind.PAUSE, Color.WHITE);
+
+    public static void showStartupSplash(int durationMillis, Runnable onComplete) {
+        StartupSplashWindow splashWindow = new StartupSplashWindow(Math.max(150, durationMillis), onComplete);
+        splashWindow.showSplash();
+    }
 
     public CellCounterGUI() {
         this(new CellCounterApplicationService());
@@ -179,34 +183,16 @@ public class CellCounterGUI extends JFrame {
         title.setFont(FONT_DISPLAY);
         title.setForeground(TEXT_PRIMARY);
 
-        JLabel subtitle = new JLabel(
-                "Production-ready demo UI for migration tracking, kinetic distributions, and export packaging");
-        subtitle.setFont(FONT_BODY);
-        subtitle.setForeground(TEXT_SECONDARY);
-
         JPanel titleGroup = new JPanel();
         titleGroup.setOpaque(false);
         titleGroup.setLayout(new BoxLayout(titleGroup, BoxLayout.Y_AXIS));
         titleGroup.add(title);
-        titleGroup.add(Box.createVerticalStrut(SPACE_XXS));
-        titleGroup.add(subtitle);
 
-        simulatorButton = createSecondaryButton("Simulator", new AppIcon(AppIcon.Kind.SIMULATOR, Color.WHITE));
-        simulatorButton.setFont(FONT_LABEL);
-        enforceButtonSize(simulatorButton, 116);
-
-        configurationButton = createSecondaryButton("Configuration", new AppIcon(AppIcon.Kind.SETTINGS, Color.WHITE));
-        configurationButton.setFont(FONT_LABEL);
-        enforceButtonSize(configurationButton, 134);
         pipelineStateLabel = createChipLabel("Idle", CHIP_IDLE);
 
         JPanel statusGroup = new JPanel();
         statusGroup.setOpaque(false);
         statusGroup.setLayout(new BoxLayout(statusGroup, BoxLayout.X_AXIS));
-        statusGroup.add(simulatorButton);
-        statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
-        statusGroup.add(configurationButton);
-        statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
         statusGroup.add(pipelineStateLabel);
 
         header.add(titleGroup, BorderLayout.WEST);
@@ -215,93 +201,95 @@ public class CellCounterGUI extends JFrame {
     }
 
     private JPanel buildControlsCard() {
-        CardPanel controlsCard = createCard("Controls Card",
-                "Acquisition, playback, and segmentation workflow controls");
+        CardPanel controlsCard = createCard("", "", false);
 
-        JPanel content = new JPanel(new FlowLayout(FlowLayout.LEFT, SPACE_XS, 0));
+        JPanel content = new JPanel();
         content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
 
-        analyzeButton = createPrimaryButton("Analyze Video", new AppIcon(AppIcon.Kind.SEARCH, Color.WHITE));
+        JPanel topRow = new JPanel(new FlowLayout(FlowLayout.LEFT, SPACE_XS, 0));
+        topRow.setOpaque(false);
+        JPanel secondRow = new JPanel(new FlowLayout(FlowLayout.LEFT, SPACE_XS, 0));
+        secondRow.setOpaque(false);
+
+        analyzeButton = createPrimaryButton("Open Video", new AppIcon(AppIcon.Kind.SEARCH, Color.WHITE));
         fastButton = createSecondaryButton("Fast Analyze", new AppIcon(AppIcon.Kind.BOLT, Color.WHITE));
-        playButton = createPrimaryButton("Play", playIcon);
-        frameForwardButton = createSecondaryButton("Step", new AppIcon(AppIcon.Kind.STEP, Color.WHITE));
-        resetButton = createSecondaryButton("Reset", new AppIcon(AppIcon.Kind.RESET, Color.WHITE));
-        mog2ViewButton = createToggleButton("Mask View", new AppIcon(AppIcon.Kind.EYE, Color.WHITE));
-        saveAnalysisButton = createPrimaryButton("Save Analysis", new AppIcon(AppIcon.Kind.FILE, Color.WHITE));
-        saveFootprintButton = createSecondaryButton("Save Footprint", new AppIcon(AppIcon.Kind.GRID, Color.WHITE));
+        playButton = createPrimaryButton("Play/Analyze", playIcon);
+        frameForwardButton = createSecondaryButton("", new AppIcon(AppIcon.Kind.STEP, Color.WHITE));
+        resetButton = createSecondaryButton("", new AppIcon(AppIcon.Kind.RESET, Color.WHITE));
+        saveResultsButton = createPrimaryButton("Save Results", new AppIcon(AppIcon.Kind.FILE, Color.WHITE));
+        configurationButton = createSecondaryButton("Configuration", new AppIcon(AppIcon.Kind.SETTINGS, Color.WHITE));
+        simulatorButton = createSecondaryButton("Simulator", new AppIcon(AppIcon.Kind.SIMULATOR, Color.WHITE));
 
-        JLabel speedLabel = new JLabel("Playback Speed");
-        speedLabel.setFont(FONT_LABEL);
-        speedLabel.setForeground(TEXT_SECONDARY);
+        playButton.setToolTipText("Play / Pause");
+        playButton.setHorizontalTextPosition(SwingConstants.LEFT);
+        playButton.setIconTextGap(SPACE_XS);
+        configureIconOnlyButton(frameForwardButton, "Step");
+        configureIconOnlyButton(resetButton, "Replay");
+
+        videoPositionSlider = new JSlider(0, 0, 0);
+        videoPositionSlider.setOpaque(false);
+        videoPositionSlider.setPreferredSize(new Dimension(260, 28));
+        videoPositionSlider.setMaximumSize(new Dimension(260, 28));
+        videoPositionValueLabel = createChipLabel(formatFrameChipText(0, 0), CHIP_IDLE);
+        videoPositionValueLabel.setFont(FONT_LABEL);
+        videoPositionValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
+        videoPositionValueLabel.setPreferredSize(new Dimension(124, 24));
 
         playbackRateSlider = new JSlider(10, 500, 100);
         playbackRateSlider.setOpaque(false);
         playbackRateSlider.setPaintTicks(false);
         playbackRateSlider.setPaintLabels(false);
         playbackRateSlider.setFont(FONT_LABEL);
-        playbackRateSlider.setPreferredSize(new Dimension(130, 28));
-        playbackRateSlider.setMaximumSize(new Dimension(130, 28));
+        playbackRateSlider.setPreferredSize(new Dimension(140, 28));
+        playbackRateSlider.setMaximumSize(new Dimension(140, 28));
 
-        playbackRateValueLabel = createChipLabel(String.format("%.1fx", DEFAULT_VIDEO_RATE), ACCENT_DEEP);
+        playbackRateValueLabel = createChipLabel(formatPlaybackSpeedText(DEFAULT_VIDEO_RATE), CHIP_IDLE);
         playbackRateValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
+        playbackRateValueLabel.setPreferredSize(new Dimension(176, 24));
+
+        tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
+        tuneDetectionButton.setFont(FONT_LABEL);
+        mog2ViewButton = createToggleButton("Mask View", new AppIcon(AppIcon.Kind.EYE, Color.WHITE));
 
         enforceButtonSize(analyzeButton, 136);
         enforceButtonSize(fastButton, 136);
-        enforceButtonSize(playButton, 108);
-        enforceButtonSize(frameForwardButton, 108);
-        enforceButtonSize(resetButton, 108);
+        enforceButtonSize(playButton, 146);
+        enforceButtonSize(frameForwardButton, 52);
+        enforceButtonSize(resetButton, 52);
+        enforceButtonSize(saveResultsButton, 146);
+        enforceButtonSize(configurationButton, 146);
+        enforceButtonSize(simulatorButton, 118);
+        enforceButtonSize(tuneDetectionButton, 152);
         enforceButtonSize(mog2ViewButton, 126);
-        enforceButtonSize(saveAnalysisButton, 150);
-        enforceButtonSize(saveFootprintButton, 156);
 
-        content.add(analyzeButton);
-        content.add(fastButton);
-        content.add(playButton);
-        content.add(frameForwardButton);
-        content.add(resetButton);
-        content.add(mog2ViewButton);
-        content.add(saveAnalysisButton);
-        content.add(saveFootprintButton);
-        content.add(speedLabel);
-        content.add(playbackRateSlider);
-        content.add(playbackRateValueLabel);
+        topRow.add(analyzeButton);
+        topRow.add(fastButton);
+        topRow.add(playButton);
+        topRow.add(frameForwardButton);
+        topRow.add(resetButton);
+        topRow.add(saveResultsButton);
+        topRow.add(configurationButton);
+        topRow.add(simulatorButton);
 
+        secondRow.add(videoPositionValueLabel);
+        secondRow.add(videoPositionSlider);
+        secondRow.add(playbackRateValueLabel);
+        secondRow.add(playbackRateSlider);
+        secondRow.add(tuneDetectionButton);
+        secondRow.add(mog2ViewButton);
+
+        content.add(topRow);
+        content.add(Box.createVerticalStrut(SPACE_XS));
+        content.add(secondRow);
         controlsCard.add(content, BorderLayout.CENTER);
-
         return controlsCard;
     }
 
     private JPanel buildVideoCard() {
-        CardPanel videoCard = createCard("Video Card", "High-fidelity live field rendering");
-        tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
-        tuneDetectionButton.setFont(FONT_LABEL);
-        enforceButtonSize(tuneDetectionButton, 152);
-        videoPositionSlider = new JSlider(0, 0, 0);
-        videoPositionSlider.setOpaque(false);
-        videoPositionSlider.setPreferredSize(new Dimension(220, 28));
-        videoPositionSlider.setMaximumSize(new Dimension(220, 28));
-        videoPositionValueLabel = createChipLabel("0/0", CHIP_IDLE);
-        videoPositionValueLabel.setFont(FONT_LABEL);
-        videoPositionValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
-        videoPositionValueLabel.setPreferredSize(new Dimension(90, 24));
+        CardPanel videoCard = createCard("", "", false);
 
-        BorderLayout layout = (BorderLayout) videoCard.getLayout();
-        Component heading = layout.getLayoutComponent(BorderLayout.NORTH);
-        if (heading != null) {
-            videoCard.remove(heading);
-            JPanel topRow = new JPanel(new BorderLayout(SPACE_S, SPACE_S));
-            topRow.setOpaque(false);
-            topRow.add(heading, BorderLayout.WEST);
-            JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, SPACE_XS, 0));
-            rightActions.setOpaque(false);
-            rightActions.add(videoPositionValueLabel);
-            rightActions.add(videoPositionSlider);
-            rightActions.add(tuneDetectionButton);
-            topRow.add(rightActions, BorderLayout.EAST);
-            videoCard.add(topRow, BorderLayout.NORTH);
-        }
-
-        videoLabel = new JLabel("No video loaded. Click Analyze to begin.", SwingConstants.CENTER);
+        videoLabel = new JLabel("No video loaded. Click Open Video to begin.", SwingConstants.CENTER);
         videoLabel.setFont(FONT_BODY);
         videoLabel.setForeground(new Color(215, 230, 250));
         videoLabel.setOpaque(true);
@@ -325,11 +313,11 @@ public class CellCounterGUI extends JFrame {
         trackStartTimeChartPanel = createCombinedChart(new double[] {}, "Track Start Distribution", "Time (sec)", "Count", 1.0);
         speedDistributionChartPanel = createCombinedChart(new double[] {}, "Speed Distribution", "Speed (px/s)", "Count", 5.0);
 
-        CardPanel trackCard = createCard("Track Start Card", "Histogram + CDF of initial detections");
+        CardPanel trackCard = createCard("", "", false);
         trackCard.add(trackStartTimeChartPanel, BorderLayout.CENTER);
         trackCard.setMinimumSize(new Dimension(360, 260));
 
-        CardPanel speedCard = createCard("Speed Card", "Histogram + CDF of observed instantaneous speeds");
+        CardPanel speedCard = createCard("", "", false);
         speedCard.add(speedDistributionChartPanel, BorderLayout.CENTER);
         speedCard.setMinimumSize(new Dimension(360, 260));
 
@@ -347,8 +335,7 @@ public class CellCounterGUI extends JFrame {
         frameForwardButton.addActionListener(e -> handleFrameForward());
         resetButton.addActionListener(e -> handleResetVideo());
         fastButton.addActionListener(e -> handleFastAnalyze());
-        saveAnalysisButton.addActionListener(e -> handleSaveAnalysis());
-        saveFootprintButton.addActionListener(e -> handleSaveFootprintData());
+        saveResultsButton.addActionListener(e -> handleSaveResults());
         mog2ViewButton.addItemListener(this::handleMOG2Toggle);
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
         videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
@@ -356,7 +343,7 @@ public class CellCounterGUI extends JFrame {
 
     private void setInitialControlState() {
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
-        playbackRateValueLabel.setText(String.format("%.1fx", DEFAULT_VIDEO_RATE));
+        playbackRateValueLabel.setText(formatPlaybackSpeedText(DEFAULT_VIDEO_RATE));
         refreshVideoPositionControls();
     }
 
@@ -954,7 +941,7 @@ public class CellCounterGUI extends JFrame {
             videoPositionSlider.setValue(0);
             videoPositionSlider.setEnabled(false);
             suppressVideoPositionEvents = false;
-            videoPositionValueLabel.setText("0/0");
+            videoPositionValueLabel.setText(formatFrameChipText(0, 0));
             return;
         }
 
@@ -969,7 +956,15 @@ public class CellCounterGUI extends JFrame {
         videoPositionSlider.setEnabled(true);
         suppressVideoPositionEvents = false;
 
-        videoPositionValueLabel.setText((current + 1) + "/" + total);
+        videoPositionValueLabel.setText(formatFrameChipText(current + 1, total));
+    }
+
+    private String formatFrameChipText(int current, int total) {
+        return "Frame: " + current + "/" + total;
+    }
+
+    private String formatPlaybackSpeedText(double rate) {
+        return String.format("Playback Speed: %.1fx", rate);
     }
 
     private int clampInt(int value, int min, int max) {
@@ -1001,7 +996,7 @@ public class CellCounterGUI extends JFrame {
 
         NumberAxis xAxis = new NumberAxis(xAxisLabel);
         NumberAxis yAxisLeft = new NumberAxis(yAxisLabel);
-        NumberAxis yAxisRight = new NumberAxis("Cumulative Probability");
+        NumberAxis yAxisRight = new NumberAxis("Cummulate Distribution");
         yAxisRight.setRange(0.0, 1.0);
 
         xAxis.setLabelFont(FONT_LABEL);
@@ -1122,7 +1117,7 @@ public class CellCounterGUI extends JFrame {
 
         JOptionPane.showMessageDialog(this, "Error opening or initializing video file.", "Error", JOptionPane.ERROR_MESSAGE);
         videoLabel.setIcon(null);
-        videoLabel.setText("No video loaded. Click Analyze to begin.");
+        videoLabel.setText("No video loaded. Click Open Video to begin.");
     }
 
     private void handlePlayPauseToggle() {
@@ -1215,7 +1210,7 @@ public class CellCounterGUI extends JFrame {
 
     private void handlePlaybackRateChange() {
         double rate = sliderToRate();
-        playbackRateValueLabel.setText(String.format("%.1fx", rate));
+        playbackRateValueLabel.setText(formatPlaybackSpeedText(rate));
 
         if (!appService.isVideoSuccessfullyInitialized() || appService.getFps() <= 0) {
             return;
@@ -1289,7 +1284,7 @@ public class CellCounterGUI extends JFrame {
 
     private void handleFastAnalyze() {
         if (!appService.isVideoSuccessfullyInitialized()) {
-            JOptionPane.showMessageDialog(this, "Please load a video first using Analyze.", "No Video",
+            JOptionPane.showMessageDialog(this, "Please load a video first using Open Video.", "No Video",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -1385,7 +1380,7 @@ public class CellCounterGUI extends JFrame {
 
         int selected = videoPositionSlider.getValue();
         int total = Math.max(1, appService.getFrameCount());
-        videoPositionValueLabel.setText((selected + 1) + "/" + total);
+        videoPositionValueLabel.setText(formatFrameChipText(selected + 1, total));
 
         if (videoPositionSlider.getValueIsAdjusting()) {
             return;
@@ -1439,7 +1434,7 @@ public class CellCounterGUI extends JFrame {
         seekWorker.execute();
     }
 
-    private void handleSaveAnalysis() {
+    private void handleSaveResults() {
         if (!appService.isVideoSuccessfullyInitialized()) {
             JOptionPane.showMessageDialog(this, "No video has been loaded or analysis performed.", "Error",
                     JOptionPane.ERROR_MESSAGE);
@@ -1453,45 +1448,31 @@ public class CellCounterGUI extends JFrame {
 
         ExportMetadata exportMetadata = new ExportMetadata(metadata[0], metadata[1], metadata[2]);
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Save Analysis Data");
-        chooser.setSelectedFile(new File("analysis_results.csv"));
+        chooser.setDialogTitle("Save Results (analysis + footprint)");
+        chooser.setSelectedFile(new File("results.csv"));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            try {
-                appService.saveAnalysisCsv(file, exportMetadata);
-                JOptionPane.showMessageDialog(this, "Analysis saved to " + file.getAbsolutePath(), "Success",
-                        JOptionPane.INFORMATION_MESSAGE);
-            } catch (IOException | IllegalStateException ex) {
-                JOptionPane.showMessageDialog(this, "Error saving analysis: " + ex.getMessage(), "Error",
-                        JOptionPane.ERROR_MESSAGE);
+            File selected = chooser.getSelectedFile();
+            File parent = selected.getParentFile() == null ? new File(".") : selected.getParentFile();
+            String rawName = selected.getName().trim();
+            String baseName = rawName;
+            if (baseName.toLowerCase().endsWith(".csv")) {
+                baseName = baseName.substring(0, baseName.length() - 4);
             }
-        }
-    }
+            if (baseName.isEmpty()) {
+                baseName = "results";
+            }
 
-    private void handleSaveFootprintData() {
-        if (!appService.isVideoSuccessfullyInitialized()) {
-            JOptionPane.showMessageDialog(this, "No video has been loaded or analysis performed for footprint data.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        String[] metadata = promptForMetadata();
-        if (metadata == null) {
-            return;
-        }
-
-        ExportMetadata exportMetadata = new ExportMetadata(metadata[0], metadata[1], metadata[2]);
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Save Footprint Data");
-        chooser.setSelectedFile(new File("footprint_data.csv"));
-        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
+            File analysisFile = new File(parent, baseName + "_analysis.csv");
+            File footprintFile = new File(parent, baseName + "_footprint.csv");
             try {
-                appService.saveFootprintCsv(file, exportMetadata);
-                JOptionPane.showMessageDialog(this, "Footprint data saved to " + file.getAbsolutePath(), "Success",
+                appService.saveAnalysisCsv(analysisFile, exportMetadata);
+                appService.saveFootprintCsv(footprintFile, exportMetadata);
+                JOptionPane.showMessageDialog(this,
+                        "Saved:\n- " + analysisFile.getAbsolutePath() + "\n- " + footprintFile.getAbsolutePath(),
+                        "Success",
                         JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException | IllegalStateException ex) {
-                JOptionPane.showMessageDialog(this, "Error saving footprint data: " + ex.getMessage(), "Error",
+                JOptionPane.showMessageDialog(this, "Error saving results: " + ex.getMessage(), "Error",
                         JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -1499,10 +1480,10 @@ public class CellCounterGUI extends JFrame {
 
     private void setPlayButtonPlaying(boolean isPlaying) {
         if (isPlaying) {
-            playButton.setText("Pause");
+            playButton.setText("Play/Analyze");
             playButton.setIcon(pauseIcon);
         } else {
-            playButton.setText("Play");
+            playButton.setText("Play/Analyze");
             playButton.setIcon(playIcon);
         }
     }
@@ -1533,11 +1514,8 @@ public class CellCounterGUI extends JFrame {
         if (mog2ViewButton != null) {
             mog2ViewButton.setEnabled(enabled);
         }
-        if (saveAnalysisButton != null) {
-            saveAnalysisButton.setEnabled(enabled);
-        }
-        if (saveFootprintButton != null) {
-            saveFootprintButton.setEnabled(enabled);
+        if (saveResultsButton != null) {
+            saveResultsButton.setEnabled(enabled);
         }
         if (simulatorButton != null) {
             simulatorButton.setEnabled(enabled);
@@ -1614,27 +1592,32 @@ public class CellCounterGUI extends JFrame {
     }
 
     private CardPanel createCard(String title, String subtitle) {
+        return createCard(title, subtitle, true);
+    }
+
+    private CardPanel createCard(String title, String subtitle, boolean showHeading) {
         CardPanel card = new CardPanel();
         card.setLayout(new BorderLayout(SPACE_S, SPACE_S));
         card.setBorder(new EmptyBorder(SPACE_M, SPACE_M, SPACE_M, SPACE_M));
+        if (showHeading) {
+            JPanel heading = new JPanel();
+            heading.setOpaque(false);
+            heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
 
-        JPanel heading = new JPanel();
-        heading.setOpaque(false);
-        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
+            JLabel titleLabel = new JLabel(title);
+            titleLabel.setFont(FONT_H2);
+            titleLabel.setForeground(TEXT_PRIMARY);
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FONT_H2);
-        titleLabel.setForeground(TEXT_PRIMARY);
+            JLabel subtitleLabel = new JLabel(subtitle);
+            subtitleLabel.setFont(FONT_BODY);
+            subtitleLabel.setForeground(TEXT_SECONDARY);
 
-        JLabel subtitleLabel = new JLabel(subtitle);
-        subtitleLabel.setFont(FONT_BODY);
-        subtitleLabel.setForeground(TEXT_SECONDARY);
+            heading.add(titleLabel);
+            heading.add(Box.createVerticalStrut(SPACE_XXS));
+            heading.add(subtitleLabel);
 
-        heading.add(titleLabel);
-        heading.add(Box.createVerticalStrut(SPACE_XXS));
-        heading.add(subtitleLabel);
-
-        card.add(heading, BorderLayout.NORTH);
+            card.add(heading, BorderLayout.NORTH);
+        }
         return card;
     }
 
@@ -1693,6 +1676,15 @@ public class CellCounterGUI extends JFrame {
                 }
             }
         });
+    }
+
+    private void configureIconOnlyButton(AbstractButton button, String tooltip) {
+        button.setText("");
+        button.setToolTipText(tooltip);
+        button.setHorizontalAlignment(SwingConstants.CENTER);
+        button.setHorizontalTextPosition(SwingConstants.CENTER);
+        button.setIconTextGap(0);
+        button.setMargin(new Insets(SPACE_XS, SPACE_XS, SPACE_XS, SPACE_XS));
     }
 
     private void enforceButtonSize(AbstractButton button, int minWidth) {
@@ -1792,6 +1784,86 @@ public class CellCounterGUI extends JFrame {
             g2.setColor(lineColor);
             g2.draw(new RoundRectangle2D.Float(x, y, width - 1, height - 1, radius, radius));
             g2.dispose();
+        }
+    }
+
+    private static class StartupSplashWindow extends JWindow {
+        private static final int WIDTH = 760;
+        private static final int HEIGHT = 360;
+        private static final Color SPLASH_TOP = new Color(3, 10, 24);
+        private static final Color SPLASH_BOTTOM = new Color(8, 23, 52);
+        private static final Color SPLASH_BORDER = new Color(122, 167, 234, 120);
+        private static final Font SPLASH_TITLE_FONT = resolveFont(
+                new String[] { "Avenir Next", "Segoe UI", "Helvetica Neue" }, Font.BOLD, 54);
+        private static final Font SPLASH_SUB_FONT = resolveFont(
+                new String[] { "Avenir Next", "Segoe UI", "Helvetica Neue" }, Font.PLAIN, 17);
+
+        private final Timer closeTimer;
+        private final Runnable onComplete;
+
+        StartupSplashWindow(int durationMillis, Runnable onComplete) {
+            this.onComplete = onComplete;
+            setBackground(new Color(0, 0, 0, 0));
+            setSize(WIDTH, HEIGHT);
+            setAlwaysOnTop(true);
+            setLocationRelativeTo(null);
+            setContentPane(new SplashPanel());
+
+            closeTimer = new Timer(durationMillis, e -> {
+                dispose();
+                if (this.onComplete != null) {
+                    this.onComplete.run();
+                }
+            });
+            closeTimer.setRepeats(false);
+        }
+
+        void showSplash() {
+            setVisible(true);
+            closeTimer.start();
+        }
+
+        private class SplashPanel extends JPanel {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                GradientPaint bg = new GradientPaint(0, 0, SPLASH_TOP, 0, getHeight(), SPLASH_BOTTOM);
+                g2.setPaint(bg);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 28, 28);
+
+                g2.setColor(SPLASH_BORDER);
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 28, 28);
+
+                int haloSize = 330;
+                g2.setColor(new Color(52, 134, 255, 78));
+                g2.fill(new Ellipse2D.Float(-90, -85, haloSize, haloSize * 0.7f));
+                g2.setColor(new Color(34, 107, 222, 62));
+                g2.fill(new Ellipse2D.Float(getWidth() - 270, -70, 350, 250));
+
+                String title = "Biomaterials Cell Counter";
+                String subtitle = "Initializing vision pipeline...";
+
+                FontMetrics fm = g2.getFontMetrics(SPLASH_TITLE_FONT);
+                int baseX = (getWidth() - fm.stringWidth(title)) / 2;
+                int baseY = getHeight() / 2 - 8;
+
+                g2.setFont(SPLASH_TITLE_FONT);
+                g2.setColor(new Color(196, 229, 255, 88));
+                g2.drawString(title, baseX + 2, baseY + 2);
+                g2.setColor(new Color(236, 247, 255));
+                g2.drawString(title, baseX, baseY);
+
+                g2.setFont(SPLASH_SUB_FONT);
+                g2.setColor(new Color(178, 208, 242));
+                FontMetrics subMetrics = g2.getFontMetrics();
+                int subX = (getWidth() - subMetrics.stringWidth(subtitle)) / 2;
+                g2.drawString(subtitle, subX, baseY + 42);
+
+                g2.dispose();
+            }
         }
     }
 

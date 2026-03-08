@@ -16,6 +16,9 @@ import java.util.Properties;
 
 public final class CellCounterApp {
     private static final Path STARTUP_TRACKING_CONFIG_PATH = Path.of("CellCounter.properties");
+    private static final double DEFAULT_STARTUP_SPLASH_SECONDS = 1.5;
+    private static final String SPLASH_SECONDS_PROPERTY = "startupSplashSeconds";
+    private static final String SPLASH_SECONDS_SYSTEM_PROPERTY = "cellcounter.startupSplashSeconds";
 
     private CellCounterApp() {
     }
@@ -32,7 +35,9 @@ public final class CellCounterApp {
         SwingUtilities.invokeLater(() -> {
             CellCounterApplicationService appService = new CellCounterApplicationService();
             appService.setTrackingConfiguration(startupDefaults);
-            new CellCounterGUI(appService).setVisible(true);
+            CellCounterGUI gui = new CellCounterGUI(appService);
+            int splashDurationMillis = resolveStartupSplashDurationMillis();
+            CellCounterGUI.showStartupSplash(splashDurationMillis, () -> gui.setVisible(true));
         });
     }
 
@@ -67,6 +72,36 @@ public final class CellCounterApp {
         applyConfigFile(builder, STARTUP_TRACKING_CONFIG_PATH);
         System.out.println("Loaded startup tracking defaults from " + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath());
         return builder.build().normalized();
+    }
+
+    private static int resolveStartupSplashDurationMillis() {
+        double seconds = DEFAULT_STARTUP_SPLASH_SECONDS;
+
+        String fromSystem = System.getProperty(SPLASH_SECONDS_SYSTEM_PROPERTY);
+        if (fromSystem != null && !fromSystem.isBlank()) {
+            try {
+                seconds = Double.parseDouble(fromSystem.trim());
+            } catch (NumberFormatException ex) {
+                System.err.println("Invalid " + SPLASH_SECONDS_SYSTEM_PROPERTY + " value '" + fromSystem
+                        + "'. Using default " + DEFAULT_STARTUP_SPLASH_SECONDS + "s.");
+            }
+        } else if (Files.exists(STARTUP_TRACKING_CONFIG_PATH)) {
+            Properties properties = new Properties();
+            try (Reader reader = Files.newBufferedReader(STARTUP_TRACKING_CONFIG_PATH)) {
+                properties.load(reader);
+                String configured = properties.getProperty(SPLASH_SECONDS_PROPERTY);
+                if (configured != null && !configured.isBlank()) {
+                    seconds = Double.parseDouble(configured.trim());
+                }
+            } catch (IOException | NumberFormatException ex) {
+                System.err.println("Invalid " + SPLASH_SECONDS_PROPERTY + " in "
+                        + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath()
+                        + ". Using default " + DEFAULT_STARTUP_SPLASH_SECONDS + "s.");
+            }
+        }
+
+        seconds = Math.max(0.1, seconds);
+        return (int) Math.round(seconds * 1000.0);
     }
 
     private static void applyConfigFile(TrackingConfigurationBuilder builder, Path filePath) {
