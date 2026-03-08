@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cell Counter Help | Workflow</title>
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Standard Workflow Analysis</h1>
+      <p>From opening a video to tuning tracking and saving outputs.</p>
+      <div class="chip-row">
+        <a class="inline" href="index.html">Back to Help Home</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1. Open the Source Video</h2>
+      <p>Click <strong>Open Video</strong>, select a microscopy video, and verify the first frame renders in the Video panel. Status moves from <code>Idle</code> to <code>Loaded</code>.</p>
+      <div class="note">
+        Use the frame slider immediately after loading to move to a representative frame before tuning.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Configure/Tune Detection Parameters</h2>
+      <p>Use <strong>Tune Detection</strong> while paused. Adjust sliders and release to render a live preview of segmentation/tracking on the current frame.</p>
+      <ul>
+        <li>Enable <strong>Preview mask view</strong> to inspect foreground extraction quality.</li>
+        <li>Adjust sensitivity/noise controls first: MOG2 settings, threshold, contour area.</li>
+        <li>Then adjust association rules: distance and movement/disappearance constraints.</li>
+        <li>Click <strong>Apply Parameters</strong> to make values active for the session.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>3. Analyze the Video</h2>
+      <p>Choose one of two analysis paths:</p>
+      <ul>
+        <li><strong>Play/Analyze</strong>: live playback and analysis.</li>
+        <li><strong>Fast Analyze</strong>: non-realtime batch pass for speed.</li>
+      </ul>
+      <p>Use <strong>Step</strong> for frame-by-frame checks, and <strong>Replay</strong> to restart from frame 1 with current settings.</p>
+    </section>
+
+    <section class="card">
+      <h2>4. Review Metrics and Distribution Charts</h2>
+      <p>The right-side charts update with track-start times and speed values as analysis progresses.</p>
+      <ul>
+        <li><strong>Track Start Distribution</strong>: when tracks begin over time.</li>
+        <li><strong>Speed Distribution</strong>: observed instantaneous speeds.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>5. Save Results</h2>
+      <p>Click <strong>Save Results</strong>, provide metadata, and choose a base filename. The app writes both outputs:</p>
+      <ul>
+        <li><code>&lt;base&gt;_analysis.csv</code></li>
+        <li><code>&lt;base&gt;_footprint.csv</code></li>
+      </ul>
+      <div class="note">
+        Re-run analysis after major tuning changes to keep exported results consistent with final parameters.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>6. Optional Validation Workflow (Ground Truth)</h2>
+      <ul>
+        <li>Generate simulation videos/CSVs via <strong>Simulator</strong>.</li>
+        <li>Run CLI evaluators against truth files.</li>
+        <li>Use GA tuner for automated parameter search when needed.</li>
+      </ul>
+      <pre><code>./run-ground-truth-eval.sh --video=... --truth-events=... \
+  --tracking-config=CellCounter.properties --output-prefix=/tmp/eval01</code></pre>
+    </section>
+
+    <p class="footer">See <a class="inline" href="ui-reference.html">UI Button Reference</a> and <a class="inline" href="configuration-reference.html">Configuration Reference</a> for parameter-level details.</p>
+  </main>
+</body>
+</html>

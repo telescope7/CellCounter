@@ -126,6 +126,9 @@ fi
 if [[ -f SIMULATION_GROUND_TRUTH.md ]]; then
   cp SIMULATION_GROUND_TRUTH.md "$INPUT_DIR/"
 fi
+if [[ -d docs/help ]]; then
+  cp -R docs/help "$INPUT_DIR/help"
+fi
 
 case "$PACKAGE_TYPE" in
   app-image)

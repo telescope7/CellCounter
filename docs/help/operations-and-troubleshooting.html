@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cell Counter Help | Operations and Troubleshooting</title>
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Operations and Troubleshooting</h1>
+      <p>Important guidance beyond basic operation: output interpretation, quality tuning, and common failures.</p>
+      <div class="chip-row">
+        <a class="inline" href="index.html">Back to Help Home</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Output Files and Meaning</h2>
+      <table>
+        <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>&lt;base&gt;_analysis.csv</code></td>
+            <td>Primary analysis summary and per-track measurements used for reporting/statistics.</td>
+          </tr>
+          <tr>
+            <td><code>&lt;base&gt;_footprint.csv</code></td>
+            <td>Detailed frame/position footprint records used for deeper validation and downstream analytics.</td>
+          </tr>
+          <tr>
+            <td><code>simcell_*.csv</code> (Simulator)</td>
+            <td>Ground-truth events/trajectory files used by evaluator and GA tuner workflows.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Recommended Tuning Order (for Noisy Real Videos)</h2>
+      <ol>
+        <li>Pause on a frame with challenging background texture.</li>
+        <li>Enable mask preview in Tune Detection.</li>
+        <li>Raise <code>minContourArea</code> until background speckles are mostly removed.</li>
+        <li>Adjust <code>normalizedMaskThreshold</code> and <code>mog2VarThreshold</code> for clean object fill.</li>
+        <li>Refine morphology settings to remove speckle without merging neighboring cells.</li>
+        <li>Then tune association/motion parameters to improve ID continuity.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Ground-Truth Evaluation Workflow</h2>
+      <pre><code>./run-ground-truth-eval.sh \
+  --video=/path/simcell.avi \
+  --truth-events=/path/simcell_events.csv \
+  --tracking-config=/path/CellCounter.properties \
+  --output-prefix=/tmp/eval_run</code></pre>
+      <p>The evaluator computes comparable quality metrics (including score/F1/time/velocity terms) against truth files.</p>
+    </section>
+
+    <section class="card">
+      <h2>Common Issues</h2>
+      <table>
+        <thead><tr><th>Symptom</th><th>Likely Cause</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Help button shows “documentation not found”</td>
+            <td>Help files not present in expected app/project location</td>
+            <td>Ensure <code>docs/help</code> exists in source and packaged <code>help/</code> is copied in distribution.</td>
+          </tr>
+          <tr>
+            <td>OpenCV load error</td>
+            <td>Native library not discoverable</td>
+            <td>Use packaged app output or validate OpenCV runtime dependency and loader fallback.</td>
+          </tr>
+          <tr>
+            <td>Too many tiny false detections</td>
+            <td>Threshold/area too permissive</td>
+            <td>Increase <code>minContourArea</code>, increase <code>normalizedMaskThreshold</code>, adjust morphology opening.</td>
+          </tr>
+          <tr>
+            <td>IDs break too often</td>
+            <td>Association constraints too strict</td>
+            <td>Increase <code>maxAssociationDistancePixels</code> and/or <code>maxFramesDisappeared</code>.</td>
+          </tr>
+          <tr>
+            <td>Different score than previous GA run</td>
+            <td>Random seed, timeout, or frame subset differences</td>
+            <td>Fix seed, keep same timeout/max-frames, and rerun with identical inputs.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Distribution and Packaging</h2>
+      <p>Use the project packaging script to bundle app jars, runtime dependencies, properties, and help docs:</p>
+      <pre><code>./package-app.sh --type=app-image</code></pre>
+      <p class="small">Packaged builds include local help HTML and can open it via the in-app Help button.</p>
+    </section>
+
+    <p class="footer">Cell Counter | Biomaterials Intelligence</p>
+  </main>
+</body>
+</html>

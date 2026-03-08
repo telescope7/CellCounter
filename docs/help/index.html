@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cell Counter Help</title>
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Cell Counter Help</h1>
+      <p>Biomaterials-grade migration tracking, tuning, simulation, and export documentation.</p>
+      <div class="chip-row">
+        <span class="chip">GUI + Headless</span>
+        <span class="chip ok">Ground-Truth Ready</span>
+        <span class="chip warn">Tracking-Sensitive Settings</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Documentation Map</h2>
+      <div class="nav">
+        <a href="workflow.html">Standard Workflow</a>
+        <a href="ui-reference.html">UI Button Reference</a>
+        <a href="configuration-reference.html">Configuration Reference</a>
+        <a href="operations-and-troubleshooting.html">Operations and Troubleshooting</a>
+      </div>
+      <p class="small">Tip: this page is opened by the in-app <strong>Help</strong> button in the top-right header.</p>
+    </section>
+
+    <section class="card-grid grid-2">
+      <article class="card">
+        <h3>Quick Start (GUI)</h3>
+        <ol>
+          <li>Click <strong>Open Video</strong> and choose a source file.</li>
+          <li>Set frame location and playback speed as needed.</li>
+          <li>Use <strong>Tune Detection</strong> on a representative paused frame.</li>
+          <li>Run with <strong>Play/Analyze</strong> or <strong>Fast Analyze</strong>.</li>
+          <li>Save outputs with <strong>Save Results</strong>.</li>
+        </ol>
+      </article>
+
+      <article class="card">
+        <h3>Quick Start (Headless)</h3>
+        <pre><code>java -jar cellcounter.jar /path/video.avi /tmp/run01 \
+  --tracking-config=/path/CellCounter.properties</code></pre>
+        <p class="small">Headless mode uses the same tracking engine and config semantics as GUI mode.</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>What This Help Covers</h2>
+      <ul>
+        <li>Full start-to-finish analysis workflow.</li>
+        <li>Description of every UI control and status behavior.</li>
+        <li>Detailed effect of every tracking configuration parameter.</li>
+        <li>Output file formats, CLI integration, and evaluator/tuning notes.</li>
+        <li>Troubleshooting for OpenCV loading, performance, and tuning quality.</li>
+      </ul>
+    </section>
+
+    <p class="footer">Cell Counter | Biomaterials Intelligence</p>
+  </main>
+</body>
+</html>

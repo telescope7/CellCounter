@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cell Counter Help | UI Reference</title>
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>UI Button and Control Reference</h1>
+      <p>Detailed description of each control in the main Cell Counter window.</p>
+      <div class="chip-row">
+        <a class="inline" href="index.html">Back to Help Home</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Top-Right Header Controls</h2>
+      <table>
+        <thead>
+          <tr><th>Control</th><th>What It Does</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Help</strong></td>
+            <td>Opens this local HTML documentation set in the system browser.</td>
+          </tr>
+          <tr>
+            <td><strong>Status Chip</strong></td>
+            <td>Shows pipeline state. Common values: <code>Idle</code>, <code>Loaded</code>, <code>Playing</code>, <code>Paused</code>, <code>Seeking</code>, <code>Fast Analyze</code>, <code>Configured</code>, <code>Complete</code>, <code>Error</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Controls Card: Primary Row</h2>
+      <table>
+        <thead>
+          <tr><th>Button</th><th>Behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Open Video</strong></td><td>Open a file chooser and initialize video + analysis pipeline.</td></tr>
+          <tr><td><strong>Fast Analyze</strong></td><td>Run accelerated full-pass analysis without realtime playback timing.</td></tr>
+          <tr><td><strong>Play/Analyze</strong></td><td>Toggle realtime play/pause while tracking each frame.</td></tr>
+          <tr><td><strong>Step</strong></td><td>Advance exactly one frame while paused.</td></tr>
+          <tr><td><strong>Replay</strong></td><td>Reset analysis and frame pointer to frame 1 using current settings.</td></tr>
+          <tr><td><strong>Save Results</strong></td><td>Save both analysis and footprint CSVs in one action.</td></tr>
+          <tr><td><strong>Simulator</strong></td><td>Open Cell Simulation Studio to generate synthetic videos and ground truth files.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Controls Card: Secondary Row</h2>
+      <table>
+        <thead>
+          <tr><th>Control</th><th>Behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Frame label</strong> (<code>Frame: X/Y</code>)</td>
+            <td>Displays current frame index and total frame count.</td>
+          </tr>
+          <tr>
+            <td><strong>Video position slider</strong></td>
+            <td>Seek to a specific frame. During seek, controls are disabled until render completes.</td>
+          </tr>
+          <tr>
+            <td><strong>Playback Speed label</strong> (<code>Playback Speed: Nx</code>)</td>
+            <td>Displays active playback rate for realtime mode.</td>
+          </tr>
+          <tr>
+            <td><strong>Playback speed slider</strong></td>
+            <td>Adjust play rate (0.1x to 5.0x).</td>
+          </tr>
+          <tr>
+            <td><strong>Tune Detection</strong></td>
+            <td>Open live detection tuning dialog for segmentation/tracking parameters.</td>
+          </tr>
+          <tr>
+            <td><strong>Mask View</strong></td>
+            <td>Toggle MOG2 foreground mask display in the video pane.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Visualization Panels</h2>
+      <table>
+        <thead>
+          <tr><th>Panel</th><th>What You See</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Video panel</strong></td><td>Current processed frame, overlays, and optional mask view.</td></tr>
+          <tr><td><strong>Track Start Distribution</strong></td><td>Histogram + cumulative distribution of track-start times.</td></tr>
+          <tr><td><strong>Speed Distribution</strong></td><td>Histogram + cumulative distribution of observed speeds.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Tune Detection Dialog Controls</h2>
+      <table>
+        <thead>
+          <tr><th>Dialog Control</th><th>Behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Parameter sliders</strong></td><td>Adjust segmentation/tracking parameters and trigger preview when released.</td></tr>
+          <tr><td><strong>Enable MOG2 shadows</strong></td><td>Toggle shadow classification in background subtraction.</td></tr>
+          <tr><td><strong>Preview mask view</strong></td><td>Preview tuning against mask output instead of composited frame.</td></tr>
+          <tr><td><strong>Apply Parameters</strong></td><td>Apply current dialog values to active runtime configuration.</td></tr>
+          <tr><td><strong>Reset Sliders</strong></td><td>Restore sliders to currently applied configuration.</td></tr>
+          <tr><td><strong>Close</strong></td><td>Close dialog and return to main window.</td></tr>
+        </tbody>
+      </table>
+      <p class="small">When preview rendering is in progress, slider and parameter input controls are temporarily disabled to prevent race conditions.</p>
+    </section>
+
+    <p class="footer">For exact parameter behavior, see <a class="inline" href="configuration-reference.html">Configuration Reference</a>.</p>
+  </main>
+</body>
+</html>

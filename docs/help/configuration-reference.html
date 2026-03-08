@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cell Counter Help | Configuration Reference</title>
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Tracking Configuration Reference</h1>
+      <p>Detailed behavior of every tunable tracking parameter, including value-direction effects.</p>
+      <div class="chip-row">
+        <a class="inline" href="index.html">Back to Help Home</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Where Configuration Is Applied</h2>
+      <ul>
+        <li><strong>GUI session</strong>: Tune Detection dialog modifies active runtime parameters.</li>
+        <li><strong>Startup defaults</strong>: <code>CellCounter.properties</code> is loaded at launch for GUI and headless.</li>
+        <li><strong>Headless override</strong>: CLI flags and <code>--tracking-config=&lt;file&gt;</code> can override startup defaults.</li>
+      </ul>
+      <div class="note">
+        If <code>CellCounter.properties</code> is missing, built-in defaults from code are used.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Built-In Factory Defaults</h2>
+      <pre><code>maxFramesDisappeared=10
+minContourArea=5.0
+maxRectCircumference=90.0
+maxVerticalDisplacementPixels=40.0
+minHorizontalMovementPixels=-3.0
+maxAssociationDistancePixels=175.0
+mog2HistoryFrames=500
+mog2VarThreshold=50.0
+mog2DetectShadows=false
+morphologyKernelSize=3
+morphologyOpenIterations=2
+morphologyDilateIterations=2
+normalizedMaskThreshold=150.0</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>Parameter-by-Parameter Effects</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Description</th>
+            <th>If Increased</th>
+            <th>If Decreased</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>maxFramesDisappeared</code></td>
+            <td>Frames a track can be missing before it is dropped.</td>
+            <td>Tracks survive occlusion longer; less fragmentation.</td>
+            <td>Tracks terminate faster; fewer stale IDs.</td>
+          </tr>
+          <tr>
+            <td><code>minContourArea</code></td>
+            <td>Minimum contour area to be treated as a cell candidate.</td>
+            <td>Rejects small noise, but can miss tiny/dim cells.</td>
+            <td>Finds smaller objects, with higher false positives.</td>
+          </tr>
+          <tr>
+            <td><code>maxRectCircumference</code></td>
+            <td>Maximum allowed contour bounding-rectangle perimeter.</td>
+            <td>Allows larger blobs/merged shapes to pass.</td>
+            <td>Suppresses larger artifacts/merged cells.</td>
+          </tr>
+          <tr>
+            <td><code>maxVerticalDisplacementPixels</code></td>
+            <td>Allowed vertical movement per association step.</td>
+            <td>Tolerates Y jitter/drift and tilted flow.</td>
+            <td>Enforces straighter horizontal rolling.</td>
+          </tr>
+          <tr>
+            <td><code>minHorizontalMovementPixels</code></td>
+            <td>Minimum horizontal movement for forward motion acceptance.</td>
+            <td>Stricter movement requirement; may drop slow movers.</td>
+            <td>More permissive; can admit stalls/backward jitter.</td>
+          </tr>
+          <tr>
+            <td><code>maxAssociationDistancePixels</code></td>
+            <td>Max centroid distance to link detections into one track.</td>
+            <td>Maintains tracks through larger jumps; more mismatch risk.</td>
+            <td>Tighter ID matching; more track breaks when motion is large.</td>
+          </tr>
+          <tr>
+            <td><code>mog2HistoryFrames</code></td>
+            <td>Background model history depth for MOG2.</td>
+            <td>More stable background, slower adaptation.</td>
+            <td>Faster adaptation, can absorb slow/standing cells.</td>
+          </tr>
+          <tr>
+            <td><code>mog2VarThreshold</code></td>
+            <td>MOG2 variance threshold for foreground decision.</td>
+            <td>More conservative segmentation (fewer detections).</td>
+            <td>More sensitive segmentation (more detections/noise).</td>
+          </tr>
+          <tr>
+            <td><code>mog2DetectShadows</code></td>
+            <td>Enable/disable MOG2 shadow detection mode.</td>
+            <td>When true, labels possible shadows separately; can reduce some artifacts.</td>
+            <td>When false, simpler foreground model; often preferred for high-contrast captures.</td>
+          </tr>
+          <tr>
+            <td><code>morphologyKernelSize</code></td>
+            <td>Kernel size for morphological ops (auto-normalized to odd).</td>
+            <td>Smoother blobs; can merge nearby objects.</td>
+            <td>Preserves detail; can leave noisy fragments.</td>
+          </tr>
+          <tr>
+            <td><code>morphologyOpenIterations</code></td>
+            <td>Opening passes to remove small bright speckles.</td>
+            <td>More noise cleanup; can erode weak real objects.</td>
+            <td>Less cleanup; more speckle survives.</td>
+          </tr>
+          <tr>
+            <td><code>morphologyDilateIterations</code></td>
+            <td>Dilation passes to expand detected foreground regions.</td>
+            <td>Bridges gaps and strengthens blobs; can over-merge.</td>
+            <td>Less expansion; fragmented detections remain separate.</td>
+          </tr>
+          <tr>
+            <td><code>normalizedMaskThreshold</code></td>
+            <td>Threshold applied to normalized mask (0 to 255).</td>
+            <td>Stricter foreground acceptance; less noise, lower recall.</td>
+            <td>More permissive foreground acceptance; higher recall/noise.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Normalization and Type Rules</h2>
+      <ul>
+        <li><code>maxFramesDisappeared</code>, <code>mog2HistoryFrames</code>, and morphology iteration counts are integer values.</li>
+        <li><code>morphologyKernelSize</code> is forced to odd and at least 1.</li>
+        <li><code>normalizedMaskThreshold</code> is clamped to [0, 255].</li>
+        <li>Negative <code>minHorizontalMovementPixels</code> values are valid.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Additional Startup Option</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Description</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>startupSplashSeconds</code></td>
+            <td>Duration of the startup splash window in GUI mode. Can also be overridden by JVM property <code>-Dcellcounter.startupSplashSeconds</code>.</td>
+            <td><code>1.5</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="footer">For tuning strategy and error diagnosis, see <a class="inline" href="operations-and-troubleshooting.html">Operations and Troubleshooting</a>.</p>
+  </main>
+</body>
+</html>

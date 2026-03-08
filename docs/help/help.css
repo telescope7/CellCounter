@@ -1,0 +1,231 @@
+:root {
+  --bg-top: #030a18;
+  --bg-bottom: #081734;
+  --surface-top: rgba(15, 33, 66, 0.93);
+  --surface-bottom: rgba(10, 24, 50, 0.9);
+  --border-soft: rgba(122, 167, 234, 0.32);
+  --text-primary: #ebf5ff;
+  --text-secondary: #afcbea;
+  --text-muted: #8faacc;
+  --accent: #3abcff;
+  --accent-strong: #2666ff;
+  --accent-dark: #1b54e4;
+  --ok: #1bb88f;
+  --warn: #dd8d38;
+  --radius-card: 22px;
+  --radius-chip: 12px;
+  --shadow: 0 16px 42px rgba(2, 8, 22, 0.48);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(40rem 24rem at -8rem -5rem, rgba(62, 127, 255, 0.22), transparent 62%),
+    radial-gradient(36rem 24rem at 100% -4rem, rgba(36, 95, 206, 0.2), transparent 60%),
+    radial-gradient(30rem 20rem at 100% 100%, rgba(22, 64, 166, 0.18), transparent 65%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  min-height: 100vh;
+}
+
+.shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 28px 48px;
+}
+
+.hero {
+  margin-bottom: 20px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3.5vw, 2.9rem);
+  letter-spacing: 0.01em;
+}
+
+.hero p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 1.04rem;
+}
+
+.chip-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-chip);
+  padding: 6px 11px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(61, 110, 174, 0.45);
+  color: #fff;
+}
+
+.chip.ok {
+  background: rgba(27, 184, 143, 0.36);
+}
+
+.chip.warn {
+  background: rgba(221, 141, 56, 0.34);
+}
+
+.card-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+
+.card {
+  background: linear-gradient(180deg, var(--surface-top), var(--surface-bottom));
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 1.33rem;
+}
+
+.card h3 {
+  margin: 2px 0 10px;
+  font-size: 1.08rem;
+}
+
+.card p,
+.card li {
+  color: var(--text-secondary);
+  line-height: 1.52;
+}
+
+.card strong {
+  color: var(--text-primary);
+}
+
+.nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.nav a {
+  text-decoration: none;
+  color: var(--text-primary);
+  border: 1px solid rgba(86, 136, 212, 0.62);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgba(38, 102, 255, 0.9), rgba(27, 84, 228, 0.9));
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(11, 42, 102, 0.45);
+}
+
+.nav a:hover {
+  filter: brightness(1.06);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  margin-top: 8px;
+}
+
+thead th {
+  text-align: left;
+  font-size: 0.86rem;
+  color: #d9ebff;
+  background: rgba(36, 82, 158, 0.46);
+}
+
+th,
+td {
+  border: 1px solid rgba(98, 143, 216, 0.34);
+  padding: 10px 11px;
+  vertical-align: top;
+}
+
+tbody td {
+  color: var(--text-secondary);
+  font-size: 0.94rem;
+}
+
+.small {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.note {
+  border-left: 3px solid var(--accent);
+  padding: 10px 12px;
+  margin: 10px 0 2px;
+  background: rgba(22, 65, 139, 0.28);
+  border-radius: 9px;
+}
+
+code {
+  color: #d7ecff;
+  background: rgba(20, 45, 87, 0.75);
+  border: 1px solid rgba(90, 133, 202, 0.55);
+  border-radius: 8px;
+  padding: 2px 7px;
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.87em;
+}
+
+pre {
+  margin: 0;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(86, 133, 206, 0.46);
+  background: rgba(6, 19, 42, 0.86);
+  padding: 12px;
+}
+
+pre code {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.footer {
+  margin-top: 22px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+a.inline {
+  color: #9fd7ff;
+}
+
+@media (max-width: 800px) {
+  .shell {
+    padding: 18px 15px 34px;
+  }
+
+  .card {
+    padding: 15px;
+  }
+}

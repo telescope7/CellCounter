@@ -35,6 +35,10 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
+import java.security.CodeSource;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
@@ -97,8 +101,8 @@ public class CellCounterGUI extends JFrame {
     private JButton resetButton;
     private JButton saveResultsButton;
     private JButton simulatorButton;
-    private JButton configurationButton;
     private JButton tuneDetectionButton;
+    private JButton helpButton;
     private JToggleButton mog2ViewButton;
     private JSlider playbackRateSlider;
     private JSlider videoPositionSlider;
@@ -189,10 +193,15 @@ public class CellCounterGUI extends JFrame {
         titleGroup.add(title);
 
         pipelineStateLabel = createChipLabel("Idle", CHIP_IDLE);
+        helpButton = createSecondaryButton("Help", new AppIcon(AppIcon.Kind.HELP, Color.WHITE));
+        helpButton.setFont(FONT_LABEL);
+        enforceButtonSize(helpButton, 94);
 
         JPanel statusGroup = new JPanel();
         statusGroup.setOpaque(false);
         statusGroup.setLayout(new BoxLayout(statusGroup, BoxLayout.X_AXIS));
+        statusGroup.add(helpButton);
+        statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
         statusGroup.add(pipelineStateLabel);
 
         header.add(titleGroup, BorderLayout.WEST);
@@ -218,7 +227,6 @@ public class CellCounterGUI extends JFrame {
         frameForwardButton = createSecondaryButton("", new AppIcon(AppIcon.Kind.STEP, Color.WHITE));
         resetButton = createSecondaryButton("", new AppIcon(AppIcon.Kind.RESET, Color.WHITE));
         saveResultsButton = createPrimaryButton("Save Results", new AppIcon(AppIcon.Kind.FILE, Color.WHITE));
-        configurationButton = createSecondaryButton("Configuration", new AppIcon(AppIcon.Kind.SETTINGS, Color.WHITE));
         simulatorButton = createSecondaryButton("Simulator", new AppIcon(AppIcon.Kind.SIMULATOR, Color.WHITE));
 
         playButton.setToolTipText("Play / Pause");
@@ -258,7 +266,6 @@ public class CellCounterGUI extends JFrame {
         enforceButtonSize(frameForwardButton, 52);
         enforceButtonSize(resetButton, 52);
         enforceButtonSize(saveResultsButton, 146);
-        enforceButtonSize(configurationButton, 146);
         enforceButtonSize(simulatorButton, 118);
         enforceButtonSize(tuneDetectionButton, 152);
         enforceButtonSize(mog2ViewButton, 126);
@@ -269,7 +276,6 @@ public class CellCounterGUI extends JFrame {
         topRow.add(frameForwardButton);
         topRow.add(resetButton);
         topRow.add(saveResultsButton);
-        topRow.add(configurationButton);
         topRow.add(simulatorButton);
 
         secondRow.add(videoPositionValueLabel);
@@ -328,8 +334,8 @@ public class CellCounterGUI extends JFrame {
 
     private void bindActions() {
         simulatorButton.addActionListener(e -> SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true)));
-        configurationButton.addActionListener(e -> handleConfigureTracking());
         tuneDetectionButton.addActionListener(e -> handleTuneDetection());
+        helpButton.addActionListener(e -> openHelpDocumentation());
         analyzeButton.addActionListener(e -> handleAnalyzeVideo());
         playButton.addActionListener(e -> handlePlayPauseToggle());
         frameForwardButton.addActionListener(e -> handleFrameForward());
@@ -425,6 +431,12 @@ public class CellCounterGUI extends JFrame {
                 clampInt(appliedConfig[0].getMorphologyDilateIterations(), 0, 8));
         JSlider maxAssociationDistanceSlider = createTuningSlider(30, 350,
                 clampInt((int) Math.round(appliedConfig[0].getMaxAssociationDistancePixels()), 30, 350));
+        JSlider maxFramesDisappearedSlider = createTuningSlider(1, 1000,
+                clampInt(appliedConfig[0].getMaxFramesDisappeared(), 1, 1000));
+        JSlider maxVerticalDisplacementSlider = createTuningSlider(0, 500,
+                clampInt((int) Math.round(appliedConfig[0].getMaxVerticalDisplacementPixels()), 0, 500));
+        JSlider minHorizontalMovementSlider = createTuningSlider(-100, 100,
+                clampInt((int) Math.round(appliedConfig[0].getMinHorizontalMovementPixels()), -100, 100));
 
         JCheckBox detectShadowsCheck = new JCheckBox("Enable MOG2 shadows");
         detectShadowsCheck.setSelected(appliedConfig[0].isMog2DetectShadows());
@@ -443,6 +455,9 @@ public class CellCounterGUI extends JFrame {
         JLabel openValue = createTuningValueChip(String.valueOf(morphologyOpenSlider.getValue()));
         JLabel dilateValue = createTuningValueChip(String.valueOf(morphologyDilateSlider.getValue()));
         JLabel associationValue = createTuningValueChip(maxAssociationDistanceSlider.getValue() + " px");
+        JLabel maxFramesDisappearedValue = createTuningValueChip(String.valueOf(maxFramesDisappearedSlider.getValue()));
+        JLabel maxVerticalDisplacementValue = createTuningValueChip(maxVerticalDisplacementSlider.getValue() + " px");
+        JLabel minHorizontalMovementValue = createTuningValueChip(minHorizontalMovementSlider.getValue() + " px");
 
         JLabel statusLabel = new JLabel("Adjust sliders and release to preview on the current frame.");
         statusLabel.setFont(FONT_BODY);
@@ -467,6 +482,9 @@ public class CellCounterGUI extends JFrame {
         addTuningRow(form, gbc, "Morphology Open Iterations", morphologyOpenSlider, openValue);
         addTuningRow(form, gbc, "Morphology Dilate Iterations", morphologyDilateSlider, dilateValue);
         addTuningRow(form, gbc, "Max Association Distance", maxAssociationDistanceSlider, associationValue);
+        addTuningRow(form, gbc, "Max Frames Disappeared", maxFramesDisappearedSlider, maxFramesDisappearedValue);
+        addTuningRow(form, gbc, "Max Vertical Displacement", maxVerticalDisplacementSlider, maxVerticalDisplacementValue);
+        addTuningRow(form, gbc, "Min Horizontal Movement", minHorizontalMovementSlider, minHorizontalMovementValue);
         addTuningCheckboxRow(form, gbc, detectShadowsCheck);
         addTuningCheckboxRow(form, gbc, maskPreviewCheck);
 
@@ -522,7 +540,10 @@ public class CellCounterGUI extends JFrame {
                 morphologyKernelSlider,
                 morphologyOpenSlider,
                 morphologyDilateSlider,
-                maxAssociationDistanceSlider);
+                maxAssociationDistanceSlider,
+                maxFramesDisappearedSlider,
+                maxVerticalDisplacementSlider,
+                minHorizontalMovementSlider);
 
         Consumer<Boolean> setTunerParameterInputsEnabled = enabled -> {
             for (JSlider slider : previewSliders) {
@@ -545,6 +566,9 @@ public class CellCounterGUI extends JFrame {
             openValue.setText(String.valueOf(morphologyOpenSlider.getValue()));
             dilateValue.setText(String.valueOf(morphologyDilateSlider.getValue()));
             associationValue.setText(maxAssociationDistanceSlider.getValue() + " px");
+            maxFramesDisappearedValue.setText(String.valueOf(maxFramesDisappearedSlider.getValue()));
+            maxVerticalDisplacementValue.setText(maxVerticalDisplacementSlider.getValue() + " px");
+            minHorizontalMovementValue.setText(minHorizontalMovementSlider.getValue() + " px");
         };
 
         Runnable loadSlidersFromApplied = () -> {
@@ -560,17 +584,22 @@ public class CellCounterGUI extends JFrame {
             morphologyDilateSlider.setValue(clampInt(appliedConfig[0].getMorphologyDilateIterations(), 0, 8));
             maxAssociationDistanceSlider.setValue(
                     clampInt((int) Math.round(appliedConfig[0].getMaxAssociationDistancePixels()), 30, 350));
+            maxFramesDisappearedSlider.setValue(clampInt(appliedConfig[0].getMaxFramesDisappeared(), 1, 1000));
+            maxVerticalDisplacementSlider.setValue(
+                    clampInt((int) Math.round(appliedConfig[0].getMaxVerticalDisplacementPixels()), 0, 500));
+            minHorizontalMovementSlider.setValue(
+                    clampInt((int) Math.round(appliedConfig[0].getMinHorizontalMovementPixels()), -100, 100));
             detectShadowsCheck.setSelected(appliedConfig[0].isMog2DetectShadows());
             suppressPreview[0] = false;
             updateValueLabels.run();
         };
 
         Supplier<TrackingConfiguration> buildWorkingConfig = () -> new TrackingConfiguration(
-                appliedConfig[0].getMaxFramesDisappeared(),
+                maxFramesDisappearedSlider.getValue(),
                 minContourAreaSlider.getValue(),
                 maxRectCircumferenceSlider.getValue(),
-                appliedConfig[0].getMaxVerticalDisplacementPixels(),
-                appliedConfig[0].getMinHorizontalMovementPixels(),
+                maxVerticalDisplacementSlider.getValue(),
+                minHorizontalMovementSlider.getValue(),
                 maxAssociationDistanceSlider.getValue(),
                 mog2HistorySlider.getValue(),
                 mog2VarThresholdSlider.getValue(),
@@ -1495,6 +1524,75 @@ public class CellCounterGUI extends JFrame {
         pipelineStateLabel.setForeground(Color.WHITE);
     }
 
+    private void openHelpDocumentation() {
+        Path helpPath = resolveHelpDocumentationPath();
+        if (helpPath == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Help documentation file was not found.\nExpected docs/help/index.html in the project or packaged app.",
+                    "Help Unavailable",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Desktop browser launch is not supported on this system.\nOpen this file manually:\n"
+                            + helpPath.toAbsolutePath(),
+                    "Help",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        try {
+            Desktop.getDesktop().browse(helpPath.toUri());
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Unable to open help in browser.\n" + ex.getMessage() + "\n\nFile:\n" + helpPath.toAbsolutePath(),
+                    "Help Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private Path resolveHelpDocumentationPath() {
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(Path.of("docs", "help", "index.html"));
+        candidates.add(Path.of("help", "index.html"));
+        candidates.add(Path.of("target", "classes", "help", "index.html"));
+
+        CodeSource codeSource = CellCounterGUI.class.getProtectionDomain().getCodeSource();
+        if (codeSource != null && codeSource.getLocation() != null) {
+            try {
+                Path location = Path.of(codeSource.getLocation().toURI()).toAbsolutePath().normalize();
+                Path base = Files.isDirectory(location) ? location : location.getParent();
+                if (base != null) {
+                    candidates.add(base.resolve("help").resolve("index.html"));
+                    candidates.add(base.resolve("docs").resolve("help").resolve("index.html"));
+                    Path parent = base.getParent();
+                    if (parent != null) {
+                        candidates.add(parent.resolve("help").resolve("index.html"));
+                        candidates.add(parent.resolve("docs").resolve("help").resolve("index.html"));
+                    }
+                }
+            } catch (Exception ignored) {
+                // Fall through to existing candidate paths.
+            }
+        }
+
+        for (Path candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            Path absolute = candidate.toAbsolutePath().normalize();
+            if (Files.isRegularFile(absolute)) {
+                return absolute;
+            }
+        }
+        return null;
+    }
+
     private void setMainControlsEnabled(boolean enabled) {
         if (analyzeButton != null) {
             analyzeButton.setEnabled(enabled);
@@ -1520,8 +1618,8 @@ public class CellCounterGUI extends JFrame {
         if (simulatorButton != null) {
             simulatorButton.setEnabled(enabled);
         }
-        if (configurationButton != null) {
-            configurationButton.setEnabled(enabled);
+        if (helpButton != null) {
+            helpButton.setEnabled(enabled);
         }
         if (tuneDetectionButton != null) {
             tuneDetectionButton.setEnabled(enabled);
@@ -1879,6 +1977,7 @@ public class CellCounterGUI extends JFrame {
             FILE,
             GRID,
             SETTINGS,
+            HELP,
             SIMULATOR,
             SLIDERS
         }
@@ -1971,6 +2070,12 @@ public class CellCounterGUI extends JFrame {
                     g2.drawLine(7, 12, 7, 14);
                     g2.drawLine(0, 7, 2, 7);
                     g2.drawLine(12, 7, 14, 7);
+                }
+                case HELP -> {
+                    g2.drawOval(1, 1, 12, 12);
+                    g2.drawArc(4, 3, 6, 5, 0, 200);
+                    g2.drawLine(7, 8, 7, 9);
+                    g2.fillOval(6, 11, 2, 2);
                 }
                 case SIMULATOR -> {
                     g2.drawRoundRect(1, 2, 12, 10, 2, 2);
