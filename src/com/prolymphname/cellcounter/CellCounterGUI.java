@@ -23,6 +23,7 @@ import org.opencv.imgproc.Imgproc;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
+import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.awt.event.KeyEvent;
@@ -80,6 +81,7 @@ public class CellCounterGUI extends JFrame {
     private static final Font FONT_BODY = resolveFont(new String[] { "Avenir Next", "Segoe UI", "Helvetica Neue" }, Font.PLAIN, 13);
     private static final Font FONT_LABEL = resolveFont(new String[] { "Avenir Next", "Segoe UI", "Helvetica Neue" }, Font.PLAIN, 12);
     private static final Font FONT_BUTTON = resolveFont(new String[] { "Avenir Next", "Segoe UI", "Helvetica Neue" }, Font.BOLD, 12);
+    private static final String APP_ICON_FILE_NAME = "cellcounter-icon-1024.png";
 
     private static final double DEFAULT_VIDEO_RATE = 1.0;
 
@@ -131,6 +133,7 @@ public class CellCounterGUI extends JFrame {
 
     private void initUI() {
         setTitle("Cell Counter | Biomaterials Intelligence");
+        applyWindowIcon();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(1120, 760));
         setPreferredSize(new Dimension(1480, 920));
@@ -1554,6 +1557,67 @@ public class CellCounterGUI extends JFrame {
                     "Help Error",
                     JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void applyWindowIcon() {
+        Image appIcon = loadWindowIconImage();
+        if (appIcon == null) {
+            return;
+        }
+        setIconImage(appIcon);
+        if (Taskbar.isTaskbarSupported()) {
+            try {
+                Taskbar taskbar = Taskbar.getTaskbar();
+                if (taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) {
+                    taskbar.setIconImage(appIcon);
+                }
+            } catch (UnsupportedOperationException | SecurityException ignored) {
+                // Optional enhancement only.
+            }
+        }
+    }
+
+    private Image loadWindowIconImage() {
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(Path.of("packaging", "assets", APP_ICON_FILE_NAME));
+        candidates.add(Path.of("assets", APP_ICON_FILE_NAME));
+        candidates.add(Path.of(APP_ICON_FILE_NAME));
+
+        CodeSource codeSource = CellCounterGUI.class.getProtectionDomain().getCodeSource();
+        if (codeSource != null && codeSource.getLocation() != null) {
+            try {
+                Path location = Path.of(codeSource.getLocation().toURI()).toAbsolutePath().normalize();
+                Path base = Files.isDirectory(location) ? location : location.getParent();
+                if (base != null) {
+                    candidates.add(base.resolve("assets").resolve(APP_ICON_FILE_NAME));
+                    Path parent = base.getParent();
+                    if (parent != null) {
+                        candidates.add(parent.resolve("assets").resolve(APP_ICON_FILE_NAME));
+                    }
+                }
+            } catch (Exception ignored) {
+                // Fall through to existing candidate paths.
+            }
+        }
+
+        for (Path candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            Path absolute = candidate.toAbsolutePath().normalize();
+            if (!Files.isRegularFile(absolute)) {
+                continue;
+            }
+            try {
+                BufferedImage image = ImageIO.read(absolute.toFile());
+                if (image != null) {
+                    return image;
+                }
+            } catch (IOException ignored) {
+                // Try the next candidate.
+            }
+        }
+        return null;
     }
 
     private Path resolveHelpDocumentationPath() {

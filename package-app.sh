@@ -10,6 +10,8 @@ PACKAGE_TYPE="${PACKAGE_TYPE:-app-image}"
 DEST_DIR="${DEST_DIR:-packaging/dist}"
 INPUT_DIR="${INPUT_DIR:-packaging/input}"
 ICON_PATH="${ICON_PATH:-}"
+DEFAULT_MAC_ICON="$ROOT_DIR/assets/CellCounter.icns"
+DEFAULT_PNG_ICON="$ROOT_DIR/assets/cellcounter-icon-512.png"
 
 usage() {
   cat <<'USAGE'
@@ -21,11 +23,15 @@ Options:
   --name=<AppName>                             App name (default: CellCounter)
   --dest=<outputDir>                           Output directory (default: packaging/dist)
   --input-dir=<stagingDir>                     Staging input directory (default: packaging/input)
-  --icon=<path>                                Optional icon file for jpackage
+  --icon=<path>                                Optional icon file for jpackage (overrides default)
   --help                                       Show this help
 
 Environment overrides:
   APP_NAME, PACKAGE_TYPE, DEST_DIR, INPUT_DIR, ICON_PATH
+
+Default icon behavior:
+  - macOS: assets/CellCounter.icns (if present)
+  - other platforms: assets/cellcounter-icon-512.png (if present)
 
 Examples:
   ./package-app.sh
@@ -88,6 +94,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "$ICON_PATH" ]]; then
+  case "$(uname -s)" in
+    Darwin)
+      if [[ -f "$DEFAULT_MAC_ICON" ]]; then
+        ICON_PATH="$DEFAULT_MAC_ICON"
+      fi
+      ;;
+    *)
+      if [[ -f "$DEFAULT_PNG_ICON" ]]; then
+        ICON_PATH="$DEFAULT_PNG_ICON"
+      fi
+      ;;
+  esac
+fi
+
+if [[ -n "$ICON_PATH" && ! -f "$ICON_PATH" ]]; then
+  echo "Error: Icon path does not exist: $ICON_PATH" >&2
+  exit 2
+fi
+
 if ! command -v mvn >/dev/null 2>&1; then
   echo "Error: Maven (mvn) is required but not found on PATH." >&2
   exit 1
@@ -129,6 +155,15 @@ fi
 if [[ -d docs/help ]]; then
   cp -R docs/help "$INPUT_DIR/help"
 fi
+if [[ -d assets ]]; then
+  mkdir -p "$INPUT_DIR/assets"
+  if [[ -f assets/cellcounter-icon-1024.png ]]; then
+    cp assets/cellcounter-icon-1024.png "$INPUT_DIR/assets/"
+  fi
+  if [[ -f assets/cellcounter-icon-512.png ]]; then
+    cp assets/cellcounter-icon-512.png "$INPUT_DIR/assets/"
+  fi
+fi
 
 case "$PACKAGE_TYPE" in
   app-image)
@@ -168,6 +203,7 @@ jpackage_cmd=(
 )
 
 if [[ -n "$ICON_PATH" ]]; then
+  echo "Using app icon: $ICON_PATH"
   jpackage_cmd+=(--icon "$ICON_PATH")
 fi
 
