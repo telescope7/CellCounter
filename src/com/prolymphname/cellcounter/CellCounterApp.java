@@ -2,6 +2,7 @@ package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 
 import javax.swing.*;
 import java.io.IOException;
@@ -310,6 +311,7 @@ public final class CellCounterApp {
         private int morphologyOpenIterations;
         private int morphologyDilateIterations;
         private double normalizedMaskThreshold;
+        private TrackerAlgorithm trackerAlgorithm;
 
         private TrackingConfigurationBuilder(TrackingConfiguration defaults) {
             this.maxFramesDisappeared = defaults.getMaxFramesDisappeared();
@@ -325,6 +327,7 @@ public final class CellCounterApp {
             this.morphologyOpenIterations = defaults.getMorphologyOpenIterations();
             this.morphologyDilateIterations = defaults.getMorphologyDilateIterations();
             this.normalizedMaskThreshold = defaults.getNormalizedMaskThreshold();
+            this.trackerAlgorithm = defaults.getTrackerAlgorithm();
         }
 
         private void apply(String rawKey, String rawValue) {
@@ -352,6 +355,7 @@ public final class CellCounterApp {
                     case "morphologyopeniterations" -> morphologyOpenIterations = Integer.parseInt(value);
                     case "morphologydilateiterations" -> morphologyDilateIterations = Integer.parseInt(value);
                     case "normalizedmaskthreshold", "maskthreshold" -> normalizedMaskThreshold = Double.parseDouble(value);
+                    case "trackeralgorithm" -> trackerAlgorithm = TrackerAlgorithm.fromString(value);
                     default -> throw new IllegalArgumentException("Unknown tracking option: " + rawKey);
                 }
             } catch (NumberFormatException ex) {
@@ -373,7 +377,8 @@ public final class CellCounterApp {
                     morphologyKernelSize,
                     morphologyOpenIterations,
                     morphologyDilateIterations,
-                    normalizedMaskThreshold);
+                    normalizedMaskThreshold,
+                    trackerAlgorithm);
         }
 
         private static boolean parseBoolean(String value, String keyName) {

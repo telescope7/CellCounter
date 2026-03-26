@@ -1,5 +1,8 @@
 package com.prolymphname.cellcounter;
 
+import com.prolymphname.cellcounter.trackingadapter.AssignmentStrategy;
+import com.prolymphname.cellcounter.trackingadapter.GreedyAssignmentStrategy;
+import com.prolymphname.cellcounter.trackingadapter.HungarianAssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import org.opencv.core.*;
 import org.opencv.videoio.VideoCapture;
@@ -67,16 +70,19 @@ public class AnalysisLogic {
 		private final double maxVerticalDisplacementPixels;
 		private final double minHorizontalMovementPixels;
 		private final double maxAssociationDistanceSq;
+		private final AssignmentStrategy assignmentStrategy;
 
 		public CentroidTracker(int maxDisappearedFrames,
 							   double maxVerticalDisplacementPixels,
 							   double minHorizontalMovementPixels,
 							   double maxAssociationDistancePixels,
+							   AssignmentStrategy assignmentStrategy,
 							   AnalysisLogic outer) {
 			this.maxDisappeared = maxDisappearedFrames; // If not updated for 'maxDisappearedFrames', it's removed
 			this.maxVerticalDisplacementPixels = maxVerticalDisplacementPixels;
 			this.minHorizontalMovementPixels = minHorizontalMovementPixels;
 			this.maxAssociationDistanceSq = maxAssociationDistancePixels * maxAssociationDistancePixels;
+			this.assignmentStrategy = assignmentStrategy;
 			this.outer = outer;
 		}
 
@@ -147,79 +153,43 @@ public class AnalysisLogic {
 				currentTrackCentroids.add(objects.get(objectID).centroid);
 			}
 
-			// Calculate distance matrix D between current tracks and new detections
-			// D[i][j] is the squared Euclidean distance between track i and detection j
+			// Build distance matrix D[track][detection].
+			// D[i][j] = squared Euclidean distance if the pair satisfies all movement
+			// constraints; Double.MAX_VALUE otherwise (forbidden).
 			double[][] D = new double[currentTrackCentroids.size()][inputCentroids.size()];
 			for (int i = 0; i < currentTrackCentroids.size(); i++) {
 				Point trackCentroid = currentTrackCentroids.get(i);
-
 				for (int j = 0; j < inputCentroids.size(); j++) {
 					Point detectionCentroid = inputCentroids.get(j);
-
 					double deltaX = detectionCentroid.x - trackCentroid.x;
 					double deltaY = detectionCentroid.y - trackCentroid.y;
 
-					// Apply movement constraints
-					// 1. No significant leftward movement
-						if (deltaX < minHorizontalMovementPixels) {
-							D[i][j] = Double.MAX_VALUE;
-							continue;
-						}
-						// 2. Limited vertical drift
-						if (Math.abs(deltaY) > maxVerticalDisplacementPixels) {
-							D[i][j] = Double.MAX_VALUE;
-							continue;
-						}
-
-					// 3. Calculate squared Euclidean distance (more efficient than sqrt for
-					// comparison)
-					double distSq = deltaX * deltaX + deltaY * deltaY;
-						if (distSq > maxAssociationDistanceSq) {
-							D[i][j] = Double.MAX_VALUE;
-						} else {
-							D[i][j] = distSq;
+					// Constraint 1: no significant leftward movement
+					if (deltaX < minHorizontalMovementPixels) {
+						D[i][j] = Double.MAX_VALUE;
+						continue;
 					}
+					// Constraint 2: limited vertical drift
+					if (Math.abs(deltaY) > maxVerticalDisplacementPixels) {
+						D[i][j] = Double.MAX_VALUE;
+						continue;
+					}
+					// Constraint 3: within maximum association radius
+					double distSq = deltaX * deltaX + deltaY * deltaY;
+					D[i][j] = (distSq > maxAssociationDistanceSq) ? Double.MAX_VALUE : distSq;
 				}
 			}
 
-			// Greedy assignment:
-			// Sort available tracks by their minimum valid distance to any detection
-			// (Indices refer to objectIDsList and currentTrackCentroids)
-			List<Integer> sortedTrackIndices = new ArrayList<>();
-			for (int i = 0; i < currentTrackCentroids.size(); i++)
-				sortedTrackIndices.add(i);
+			// Delegate to the pluggable assignment strategy (greedy or Hungarian).
+			int[] assignment = assignmentStrategy.assign(D);
 
-			// Custom sort: tracks with at least one valid (non-MAX_VALUE) match first, then
-			// by min distance
-			sortedTrackIndices.sort((idx1, idx2) -> {
-				double minD1 = (D[idx1].length == 0) ? Double.MAX_VALUE
-						: Arrays.stream(D[idx1]).min().orElse(Double.MAX_VALUE);
-				double minD2 = (D[idx2].length == 0) ? Double.MAX_VALUE
-						: Arrays.stream(D[idx2]).min().orElse(Double.MAX_VALUE);
-				return Double.compare(minD1, minD2);
-			});
+			Set<Integer> usedDetectionIndices = new HashSet<>();
 
-			Set<Integer> usedTrackIndices = new HashSet<>(); // Indices from sortedTrackIndices / objectIDsList
-			Set<Integer> usedDetectionIndices = new HashSet<>(); // Indices from inputCentroids / rects
-
-			for (int trackIdx : sortedTrackIndices) {
-				if (D[trackIdx].length == 0)
-					continue; // No detections for this track (should not happen if inputCentroids not empty)
-
-				int bestDetectionIdx = -1;
-					double minDistanceSq = maxAssociationDistanceSq; // Use the threshold as initial min
-
-				for (int detectionIdx = 0; detectionIdx < D[trackIdx].length; detectionIdx++) {
-					if (!usedDetectionIndices.contains(detectionIdx) && D[trackIdx][detectionIdx] < minDistanceSq) {
-						minDistanceSq = D[trackIdx][detectionIdx];
-						bestDetectionIdx = detectionIdx;
-					}
-				}
-
-				if (bestDetectionIdx != -1) { // Found a valid match within constraints
+			for (int trackIdx = 0; trackIdx < objectIDsList.size(); trackIdx++) {
+				int bestDetectionIdx = assignment[trackIdx];
+				if (bestDetectionIdx != -1) {
 					int objectID = objectIDsList.get(trackIdx);
 					Track track = objects.get(objectID);
-
 					Point newCentroid = inputCentroids.get(bestDetectionIdx);
 
 					// Calculate instant speed
@@ -230,29 +200,26 @@ public class AnalysisLogic {
 					} else {
 						track.instantSpeed = 0.0;
 					}
-					// Store for next frame's speed calculation
 					track.previousCentroidForSpeed = new Point(newCentroid.x, newCentroid.y);
 					track.centroid = newCentroid;
 					track.bbox = rects.get(bestDetectionIdx);
 					track.history.add(new HistoryItem(frameNumber, new Point(track.bbox.x, track.bbox.y),
 							new Point(track.bbox.x + track.bbox.width, track.bbox.y + track.bbox.height)));
-					track.missed = 0; // Reset missed counter
-					disappeared.put(objectID, 0); // Reset disappeared counter
+					track.missed = 0;
+					disappeared.put(objectID, 0);
 
-					usedTrackIndices.add(trackIdx);
 					usedDetectionIndices.add(bestDetectionIdx);
 				}
 			}
 
-			// Handle tracks that were not matched (increment disappeared count or
-			// deregister)
+			// Handle unmatched tracks
 			for (int i = 0; i < objectIDsList.size(); i++) {
-				if (!usedTrackIndices.contains(i)) {
+				if (assignment[i] == -1) {
 					int objectID = objectIDsList.get(i);
 					Track track = objects.get(objectID);
 					track.missed++;
 					disappeared.put(objectID, disappeared.get(objectID) + 1);
-					track.instantSpeed = 0.0; // No movement
+					track.instantSpeed = 0.0;
 					if (disappeared.get(objectID) >= maxDisappeared) {
 						deregister(objectID);
 					}
@@ -279,11 +246,16 @@ public class AnalysisLogic {
 				cfg.getMog2HistoryFrames(),
 				cfg.getMog2VarThreshold(),
 				cfg.isMog2DetectShadows());
+		AssignmentStrategy strategy = switch (cfg.getTrackerAlgorithm()) {
+			case HUNGARIAN -> new HungarianAssignmentStrategy();
+			default -> new GreedyAssignmentStrategy();
+		};
 		this.cellTracker = new CentroidTracker(
 				cfg.getMaxFramesDisappeared(),
 				cfg.getMaxVerticalDisplacementPixels(),
 				cfg.getMinHorizontalMovementPixels(),
 				cfg.getMaxAssociationDistancePixels(),
+				strategy,
 				this);
 	}
 

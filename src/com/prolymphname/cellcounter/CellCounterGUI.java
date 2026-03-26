@@ -4,6 +4,7 @@ import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.export.ExportMetadata;
 import com.prolymphname.cellcounter.simulation.CellSimulationGUI;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
@@ -106,6 +107,7 @@ public class CellCounterGUI extends JFrame {
     private JButton tuneDetectionButton;
     private JButton helpButton;
     private JToggleButton mog2ViewButton;
+    private JComboBox<TrackerAlgorithm> trackerAlgorithmCombo;
     private JSlider playbackRateSlider;
     private JSlider videoPositionSlider;
     private JLabel videoPositionValueLabel;
@@ -263,6 +265,14 @@ public class CellCounterGUI extends JFrame {
         tuneDetectionButton.setFont(FONT_LABEL);
         mog2ViewButton = createToggleButton("Mask View", new AppIcon(AppIcon.Kind.EYE, Color.WHITE));
 
+        trackerAlgorithmCombo = new JComboBox<>(TrackerAlgorithm.values());
+        trackerAlgorithmCombo.setSelectedItem(appService.getTrackingConfiguration().getTrackerAlgorithm());
+        trackerAlgorithmCombo.setFont(FONT_LABEL);
+        trackerAlgorithmCombo.setPreferredSize(new Dimension(190, 28));
+        trackerAlgorithmCombo.setMaximumSize(new Dimension(190, 28));
+        trackerAlgorithmCombo.setOpaque(false);
+        trackerAlgorithmCombo.setToolTipText("Tracker assignment algorithm");
+
         enforceButtonSize(analyzeButton, 136);
         enforceButtonSize(fastButton, 136);
         enforceButtonSize(playButton, 146);
@@ -287,6 +297,7 @@ public class CellCounterGUI extends JFrame {
         secondRow.add(playbackRateSlider);
         secondRow.add(tuneDetectionButton);
         secondRow.add(mog2ViewButton);
+        secondRow.add(trackerAlgorithmCombo);
 
         content.add(topRow);
         content.add(Box.createVerticalStrut(SPACE_XS));
@@ -346,6 +357,7 @@ public class CellCounterGUI extends JFrame {
         fastButton.addActionListener(e -> handleFastAnalyze());
         saveResultsButton.addActionListener(e -> handleSaveResults());
         mog2ViewButton.addItemListener(this::handleMOG2Toggle);
+        trackerAlgorithmCombo.addActionListener(e -> handleTrackerAlgorithmChange());
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
         videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
     }
@@ -371,6 +383,7 @@ public class CellCounterGUI extends JFrame {
         setPlayButtonPlaying(false);
 
         appService.setTrackingConfiguration(updated);
+        trackerAlgorithmCombo.setSelectedItem(updated.getTrackerAlgorithm());
 
         if (wasInitialized) {
             mog2ViewButton.setSelected(false);
@@ -392,6 +405,46 @@ public class CellCounterGUI extends JFrame {
                 ? "Tracking configuration applied. Playback was paused and reset to frame 1."
                 : "Tracking configuration applied.";
         JOptionPane.showMessageDialog(this, message, "Configuration", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void handleTrackerAlgorithmChange() {
+        TrackerAlgorithm selected = (TrackerAlgorithm) trackerAlgorithmCombo.getSelectedItem();
+        if (selected == null) return;
+        TrackingConfiguration current = appService.getTrackingConfiguration();
+        if (current.getTrackerAlgorithm() == selected) return;
+
+        TrackingConfiguration updated = new TrackingConfiguration(
+                current.getMaxFramesDisappeared(),
+                current.getMinContourArea(),
+                current.getMaxRectCircumference(),
+                current.getMaxVerticalDisplacementPixels(),
+                current.getMinHorizontalMovementPixels(),
+                current.getMaxAssociationDistancePixels(),
+                current.getMog2HistoryFrames(),
+                current.getMog2VarThreshold(),
+                current.isMog2DetectShadows(),
+                current.getMorphologyKernelSize(),
+                current.getMorphologyOpenIterations(),
+                current.getMorphologyDilateIterations(),
+                current.getNormalizedMaskThreshold(),
+                selected);
+
+        boolean wasPlaying = videoPlaying && !paused;
+        videoTimer.stop();
+        videoPlaying = false;
+        setPlayButtonPlaying(false);
+
+        appService.setTrackingConfiguration(updated);
+
+        if (appService.isVideoSuccessfullyInitialized()) {
+            paused = true;
+            mog2ViewButton.setSelected(false);
+            appService.setDisplayMOG2Foreground(false);
+            refreshCurrentVideoFrame();
+            updateCharts();
+            refreshVideoPositionControls();
+            setPipelineState("Configured", CHIP_ACTIVE);
+        }
     }
 
     private void handleTuneDetection() {
@@ -610,7 +663,8 @@ public class CellCounterGUI extends JFrame {
                 toOdd(morphologyKernelSlider.getValue()),
                 morphologyOpenSlider.getValue(),
                 morphologyDilateSlider.getValue(),
-                maskThresholdSlider.getValue()).normalized();
+                maskThresholdSlider.getValue(),
+                appliedConfig[0].getTrackerAlgorithm()).normalized();
 
         class PreviewRunner {
             private SwingWorker<Mat, Void> worker;
@@ -849,7 +903,8 @@ public class CellCounterGUI extends JFrame {
                     ((Number) morphologyKernelSize.getValue()).intValue(),
                     ((Number) morphologyOpenIterations.getValue()).intValue(),
                     ((Number) morphologyDilateIterations.getValue()).intValue(),
-                    ((Number) normalizedMaskThreshold.getValue()).doubleValue()).normalized();
+                    ((Number) normalizedMaskThreshold.getValue()).doubleValue(),
+                    current.getTrackerAlgorithm()).normalized();
             dialog.dispose();
         });
         cancelButton.addActionListener(e -> dialog.dispose());

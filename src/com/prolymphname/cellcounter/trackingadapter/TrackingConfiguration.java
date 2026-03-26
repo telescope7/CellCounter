@@ -14,6 +14,7 @@ public final class TrackingConfiguration {
     private final int morphologyOpenIterations;
     private final int morphologyDilateIterations;
     private final double normalizedMaskThreshold;
+    private final TrackerAlgorithm trackerAlgorithm;
 
     public TrackingConfiguration(
             int maxFramesDisappeared,
@@ -28,7 +29,8 @@ public final class TrackingConfiguration {
             int morphologyKernelSize,
             int morphologyOpenIterations,
             int morphologyDilateIterations,
-            double normalizedMaskThreshold) {
+            double normalizedMaskThreshold,
+            TrackerAlgorithm trackerAlgorithm) {
         this.maxFramesDisappeared = maxFramesDisappeared;
         this.minContourArea = minContourArea;
         this.maxRectCircumference = maxRectCircumference;
@@ -42,6 +44,7 @@ public final class TrackingConfiguration {
         this.morphologyOpenIterations = morphologyOpenIterations;
         this.morphologyDilateIterations = morphologyDilateIterations;
         this.normalizedMaskThreshold = normalizedMaskThreshold;
+        this.trackerAlgorithm = (trackerAlgorithm != null) ? trackerAlgorithm : TrackerAlgorithm.GREEDY;
     }
 
     public static TrackingConfiguration defaults() {
@@ -58,7 +61,8 @@ public final class TrackingConfiguration {
                 3,
                 2,
                 2,
-                150.0);
+                150.0,
+                TrackerAlgorithm.GREEDY);
     }
 
     public TrackingConfiguration normalized() {
@@ -80,7 +84,8 @@ public final class TrackingConfiguration {
                 normalizedKernel,
                 Math.max(0, morphologyOpenIterations),
                 Math.max(0, morphologyDilateIterations),
-                Math.max(0.0, Math.min(255.0, normalizedMaskThreshold)));
+                Math.max(0.0, Math.min(255.0, normalizedMaskThreshold)),
+                (trackerAlgorithm != null) ? trackerAlgorithm : TrackerAlgorithm.GREEDY);
     }
 
     public int getMaxFramesDisappeared() {
@@ -133,5 +138,9 @@ public final class TrackingConfiguration {
 
     public double getNormalizedMaskThreshold() {
         return normalizedMaskThreshold;
+    }
+
+    public TrackerAlgorithm getTrackerAlgorithm() {
+        return trackerAlgorithm;
     }
 }

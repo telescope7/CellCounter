@@ -4,6 +4,7 @@ import com.prolymphname.cellcounter.HeadlessProcessor;
 import com.prolymphname.cellcounter.OpenCvSupport;
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -449,6 +450,7 @@ public final class GroundTruthEvaluationCli {
         private int morphologyOpenIterations;
         private int morphologyDilateIterations;
         private double normalizedMaskThreshold;
+        private TrackerAlgorithm trackerAlgorithm;
 
         private TrackingConfigurationBuilder(TrackingConfiguration defaults) {
             this.maxFramesDisappeared = defaults.getMaxFramesDisappeared();
@@ -464,6 +466,7 @@ public final class GroundTruthEvaluationCli {
             this.morphologyOpenIterations = defaults.getMorphologyOpenIterations();
             this.morphologyDilateIterations = defaults.getMorphologyDilateIterations();
             this.normalizedMaskThreshold = defaults.getNormalizedMaskThreshold();
+            this.trackerAlgorithm = defaults.getTrackerAlgorithm();
         }
 
         private void apply(String rawKey, String rawValue) {
@@ -491,6 +494,7 @@ public final class GroundTruthEvaluationCli {
                     case "morphologyopeniterations" -> morphologyOpenIterations = Integer.parseInt(value);
                     case "morphologydilateiterations" -> morphologyDilateIterations = Integer.parseInt(value);
                     case "normalizedmaskthreshold", "maskthreshold" -> normalizedMaskThreshold = Double.parseDouble(value);
+                    case "trackeralgorithm" -> trackerAlgorithm = TrackerAlgorithm.fromString(value);
                     default -> throw new IllegalArgumentException("Unknown tracking option: " + rawKey);
                 }
             } catch (NumberFormatException ex) {
@@ -512,7 +516,8 @@ public final class GroundTruthEvaluationCli {
                     morphologyKernelSize,
                     morphologyOpenIterations,
                     morphologyDilateIterations,
-                    normalizedMaskThreshold);
+                    normalizedMaskThreshold,
+                    trackerAlgorithm);
         }
 
         private static boolean parseBoolean(String value, String keyName) {
