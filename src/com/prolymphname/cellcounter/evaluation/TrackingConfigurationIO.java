@@ -1,6 +1,7 @@
 package com.prolymphname.cellcounter.evaluation;
 
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -61,6 +62,7 @@ public final class TrackingConfigurationIO {
         properties.setProperty("morphologyOpenIterations", Integer.toString(config.getMorphologyOpenIterations()));
         properties.setProperty("morphologyDilateIterations", Integer.toString(config.getMorphologyDilateIterations()));
         properties.setProperty("normalizedMaskThreshold", formatDouble(config.getNormalizedMaskThreshold()));
+        properties.setProperty("trackerAlgorithm", config.getTrackerAlgorithm().name());
         return properties;
     }
 
@@ -77,7 +79,8 @@ public final class TrackingConfigurationIO {
                 + config.getMorphologyKernelSize() + "|"
                 + config.getMorphologyOpenIterations() + "|"
                 + config.getMorphologyDilateIterations() + "|"
-                + formatDouble(config.getNormalizedMaskThreshold());
+                + formatDouble(config.getNormalizedMaskThreshold()) + "|"
+                + config.getTrackerAlgorithm().name();
     }
 
     public static Builder builderFromDefaults() {
@@ -117,6 +120,7 @@ public final class TrackingConfigurationIO {
         private int morphologyOpenIterations;
         private int morphologyDilateIterations;
         private double normalizedMaskThreshold;
+        private TrackerAlgorithm trackerAlgorithm;
 
         public Builder(TrackingConfiguration defaults) {
             this.maxFramesDisappeared = defaults.getMaxFramesDisappeared();
@@ -132,6 +136,7 @@ public final class TrackingConfigurationIO {
             this.morphologyOpenIterations = defaults.getMorphologyOpenIterations();
             this.morphologyDilateIterations = defaults.getMorphologyDilateIterations();
             this.normalizedMaskThreshold = defaults.getNormalizedMaskThreshold();
+            this.trackerAlgorithm = defaults.getTrackerAlgorithm();
         }
 
         public Builder apply(String rawKey, String rawValue) {
@@ -159,6 +164,7 @@ public final class TrackingConfigurationIO {
                     case "morphologyopeniterations" -> morphologyOpenIterations = Integer.parseInt(value);
                     case "morphologydilateiterations" -> morphologyDilateIterations = Integer.parseInt(value);
                     case "normalizedmaskthreshold", "maskthreshold" -> normalizedMaskThreshold = Double.parseDouble(value);
+                    case "trackeralgorithm" -> trackerAlgorithm = TrackerAlgorithm.fromString(value);
                     default -> throw new IllegalArgumentException("Unknown tracking option: " + rawKey);
                 }
             } catch (NumberFormatException ex) {
@@ -181,7 +187,8 @@ public final class TrackingConfigurationIO {
                     morphologyKernelSize,
                     morphologyOpenIterations,
                     morphologyDilateIterations,
-                    normalizedMaskThreshold);
+                    normalizedMaskThreshold,
+                    trackerAlgorithm);
         }
 
         private static boolean parseBoolean(String value, String keyName) {

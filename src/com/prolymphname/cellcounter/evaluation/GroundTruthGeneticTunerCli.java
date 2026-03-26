@@ -2,6 +2,7 @@ package com.prolymphname.cellcounter.evaluation;
 
 import com.prolymphname.cellcounter.OpenCvSupport;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -384,7 +385,8 @@ public final class GroundTruthGeneticTunerCli {
                 morphologyKernelSize,
                 morphologyOpenIterations,
                 morphologyDilateIterations,
-                normalizedMaskThreshold).normalized());
+                normalizedMaskThreshold,
+                baseline.getTrackerAlgorithm()).normalized());
     }
 
     private static TrackingConfiguration crossover(
@@ -404,7 +406,8 @@ public final class GroundTruthGeneticTunerCli {
                 random.nextBoolean() ? a.getMorphologyKernelSize() : b.getMorphologyKernelSize(),
                 random.nextBoolean() ? a.getMorphologyOpenIterations() : b.getMorphologyOpenIterations(),
                 random.nextBoolean() ? a.getMorphologyDilateIterations() : b.getMorphologyDilateIterations(),
-                random.nextBoolean() ? a.getNormalizedMaskThreshold() : b.getNormalizedMaskThreshold()).normalized());
+                random.nextBoolean() ? a.getNormalizedMaskThreshold() : b.getNormalizedMaskThreshold(),
+                a.getTrackerAlgorithm()).normalized());
     }
 
     private static TrackingConfiguration mutate(
@@ -464,7 +467,8 @@ public final class GroundTruthGeneticTunerCli {
                 morphologyKernelSize,
                 morphologyOpenIterations,
                 morphologyDilateIterations,
-                normalizedMaskThreshold).normalized());
+                normalizedMaskThreshold,
+                current.getTrackerAlgorithm()).normalized());
     }
 
     private static int maybeMutateInt(
@@ -551,7 +555,8 @@ public final class GroundTruthGeneticTunerCli {
                 cfg.getMorphologyKernelSize(),
                 cfg.getMorphologyOpenIterations(),
                 cfg.getMorphologyDilateIterations(),
-                roundWhole(cfg.getNormalizedMaskThreshold()))
+                roundWhole(cfg.getNormalizedMaskThreshold()),
+                cfg.getTrackerAlgorithm())
                 .normalized();
     }
 
