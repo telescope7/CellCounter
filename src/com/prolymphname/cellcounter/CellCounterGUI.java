@@ -7,6 +7,7 @@ import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 import com.prolymphname.cellcounter.ui.AppIcon;
 import com.prolymphname.cellcounter.ui.CardPanel;
+import com.prolymphname.cellcounter.ui.ChartRefreshController;
 import com.prolymphname.cellcounter.ui.DetectionTunerDialog;
 import com.prolymphname.cellcounter.ui.GradientPanel;
 import com.prolymphname.cellcounter.ui.StartupSplashWindow;
@@ -81,6 +82,7 @@ public class CellCounterGUI extends JFrame {
     private static final double DEFAULT_VIDEO_RATE = 1.0;
 
     private final CellCounterApplicationService appService;
+    private final ChartRefreshController chartRefreshController = new ChartRefreshController();
 
     private boolean videoPlaying = false;
     private boolean paused = false;
@@ -162,7 +164,7 @@ public class CellCounterGUI extends JFrame {
 
         videoTimer = new Timer(33, e -> {
             if (appService.isVideoSuccessfullyInitialized() && videoPlaying && !paused) {
-                updateFrame();
+                updateFrame(false);
             }
         });
 
@@ -359,6 +361,7 @@ public class CellCounterGUI extends JFrame {
     private void setInitialControlState() {
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
         playbackRateValueLabel.setText(formatPlaybackSpeedText(DEFAULT_VIDEO_RATE));
+        chartRefreshController.configureForFps(appService.getFps());
         refreshVideoPositionControls();
     }
 
@@ -396,7 +399,7 @@ public class CellCounterGUI extends JFrame {
             mog2ViewButton.setSelected(false);
             appService.setDisplayMOG2Foreground(false);
             refreshCurrentVideoFrame();
-            updateCharts();
+            refreshChartsNow();
             refreshVideoPositionControls();
             setPipelineState("Configured", CHIP_ACTIVE);
         }
@@ -441,7 +444,7 @@ public class CellCounterGUI extends JFrame {
                     mog2ViewButton.setSelected(false);
                     appService.setDisplayMOG2Foreground(false);
                     refreshCurrentVideoFrame();
-                    updateCharts();
+                    refreshChartsNow();
                     paused = true;
                     videoPlaying = false;
                     videoTimer.stop();
@@ -608,6 +611,21 @@ public class CellCounterGUI extends JFrame {
         }
     }
 
+    private void syncChartRefreshIntervalWithVideo() {
+        chartRefreshController.configureForFps(appService.getFps());
+    }
+
+    private void refreshChartsNow() {
+        updateCharts();
+        chartRefreshController.markRefreshedAtFrame(appService.getCurrentFrameNumber());
+    }
+
+    private void refreshChartsIfDue() {
+        if (chartRefreshController.shouldRefreshAtFrame(appService.getCurrentFrameNumber())) {
+            refreshChartsNow();
+        }
+    }
+
     private void handleAnalyzeVideo() {
         JFileChooser chooser = new JFileChooser();
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
@@ -622,6 +640,7 @@ public class CellCounterGUI extends JFrame {
             mog2ViewButton.setSelected(false);
             playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
             updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
+            syncChartRefreshIntervalWithVideo();
             setPipelineState("Loaded", CHIP_ACTIVE);
 
             Mat firstFrame = appService.getLastProcessedFrame();
@@ -634,7 +653,7 @@ public class CellCounterGUI extends JFrame {
                 JOptionPane.showMessageDialog(this, "Video loaded, but the first frame could not be rendered.",
                         "Display Error", JOptionPane.WARNING_MESSAGE);
             }
-            updateCharts();
+            refreshChartsNow();
             refreshVideoPositionControls();
             return;
         }
@@ -734,7 +753,8 @@ public class CellCounterGUI extends JFrame {
         }
 
         setPipelineState("Loaded", CHIP_ACTIVE);
-        updateCharts();
+        syncChartRefreshIntervalWithVideo();
+        refreshChartsNow();
         refreshVideoPositionControls();
     }
 
@@ -763,10 +783,18 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void updateFrame() {
+        updateFrame(false);
+    }
+
+    private void updateFrame(boolean forceChartRefresh) {
         Mat frame = appService.processNextFrameForGUI();
         if (frame != null && !frame.empty()) {
             videoLabel.setIcon(new ImageIcon(matToBufferedImage(frame)));
-            updateCharts();
+            if (forceChartRefresh) {
+                refreshChartsNow();
+            } else {
+                refreshChartsIfDue();
+            }
             refreshVideoPositionControls();
             return;
         }
@@ -777,6 +805,7 @@ public class CellCounterGUI extends JFrame {
             paused = true;
             setPlayButtonPlaying(false);
             setPipelineState("Complete", CHIP_ACTIVE);
+            refreshChartsNow();
             refreshVideoPositionControls();
             if (SwingUtilities.isEventDispatchThread()) {
                 JOptionPane.showMessageDialog(this, "End of video.", "Playback Finished", JOptionPane.INFORMATION_MESSAGE);
@@ -831,6 +860,7 @@ public class CellCounterGUI extends JFrame {
         setPipelineState("Fast Analyze", CHIP_WARNING);
 
         appService.resetAnalysisForCurrentVideo();
+        syncChartRefreshIntervalWithVideo();
         int totalFrames = appService.getFrameCount();
         int updateFrequency = Math.max(1, totalFrames / 100);
 
@@ -870,7 +900,7 @@ public class CellCounterGUI extends JFrame {
                         videoLabel.setIcon(new ImageIcon(matToBufferedImage(latestFrame)));
                     }
                     latestFrame.release();
-                    updateCharts();
+                    refreshChartsIfDue();
                 }
             }
 
@@ -880,7 +910,7 @@ public class CellCounterGUI extends JFrame {
                 if (finalFrame != null && !finalFrame.empty()) {
                     videoLabel.setIcon(new ImageIcon(matToBufferedImage(finalFrame)));
                 }
-                updateCharts();
+                refreshChartsNow();
                 refreshVideoPositionControls();
                 setPipelineState("Loaded", CHIP_ACTIVE);
                 JOptionPane.showMessageDialog(CellCounterGUI.this, "Fast Analysis Complete.", "Done",
@@ -893,7 +923,7 @@ public class CellCounterGUI extends JFrame {
 
     private void handleFrameForward() {
         if (appService.isVideoSuccessfullyInitialized() && paused && appService.isCaptureActive()) {
-            updateFrame();
+            updateFrame(true);
             refreshVideoPositionControls();
             if (!appService.isCaptureActive()) {
                 setPlayButtonPlaying(false);
@@ -943,7 +973,7 @@ public class CellCounterGUI extends JFrame {
                     if (seekFrame != null && !seekFrame.empty()) {
                         videoLabel.setIcon(new ImageIcon(matToBufferedImage(seekFrame)));
                         videoLabel.setText(null);
-                        updateCharts();
+                        refreshChartsNow();
                         setPipelineState(appService.isCaptureActive() ? "Paused" : "Complete",
                                 appService.isCaptureActive() ? CHIP_WARNING : CHIP_ACTIVE);
                     } else {
