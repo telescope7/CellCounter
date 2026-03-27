@@ -107,7 +107,7 @@ public class CellCounterGUI extends JFrame {
     private JButton frameForwardButton;
     private JButton resetButton;
     private JButton saveResultsButton;
-    private JButton simulatorButton;
+    private JLabel simulatorLink;
     private JButton tuneDetectionButton;
     private JLabel helpButton;
     private JCheckBox mirrorTrackingCheckBox;
@@ -220,26 +220,9 @@ public class CellCounterGUI extends JFrame {
         titleGroup.setLayout(new BoxLayout(titleGroup, BoxLayout.Y_AXIS));
         titleGroup.add(title);
 
-        helpButton = new JLabel("<html><u>Help</u></html>");
-        helpButton.setFont(FONT_LABEL);
-        helpButton.setForeground(ACCENT);
-        helpButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        helpButton.setIcon(new AppIcon(AppIcon.Kind.HELP, ACCENT));
-        helpButton.setIconTextGap(SPACE_XXS);
-        helpButton.setToolTipText("Open documentation (H)");
-        helpButton.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                helpButton.setForeground(TEXT_PRIMARY);
-                helpButton.setIcon(new AppIcon(AppIcon.Kind.HELP, TEXT_PRIMARY));
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                helpButton.setForeground(ACCENT);
-                helpButton.setIcon(new AppIcon(AppIcon.Kind.HELP, ACCENT));
-            }
-        });
+        simulatorLink = createHeaderLink("Simulator", AppIcon.Kind.SIMULATOR, "Open Cell Simulation Studio",
+                () -> SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true)));
+        helpButton = createHeaderLink("Help", AppIcon.Kind.HELP, "Open documentation (H)", this::openHelpDocumentation);
 
         pipelineStateDotLabel = new JLabel("\u25CF");
         pipelineStateDotLabel.setFont(FONT_BUTTON);
@@ -259,6 +242,8 @@ public class CellCounterGUI extends JFrame {
         JPanel statusGroup = new JPanel();
         statusGroup.setOpaque(false);
         statusGroup.setLayout(new BoxLayout(statusGroup, BoxLayout.X_AXIS));
+        statusGroup.add(simulatorLink);
+        statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
         statusGroup.add(helpButton);
         statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
         statusGroup.add(pipelineStateChip);
@@ -286,8 +271,6 @@ public class CellCounterGUI extends JFrame {
         frameForwardButton = createSecondaryButton("", new AppIcon(AppIcon.Kind.STEP, Color.WHITE));
         resetButton = createSecondaryButton("", new AppIcon(AppIcon.Kind.RESET, Color.WHITE));
         saveResultsButton = createPrimaryButton("Save Results", new AppIcon(AppIcon.Kind.FILE, Color.WHITE));
-        simulatorButton = createSecondaryButton("Simulator", new AppIcon(AppIcon.Kind.SIMULATOR, Color.WHITE));
-
         analyzeButton.setToolTipText("Open Video (O)");
         fastButton.setToolTipText("Fast Analyze (F)");
         playButton.setToolTipText("Play / Pause (P or K, Esc to pause)");
@@ -296,7 +279,6 @@ public class CellCounterGUI extends JFrame {
         configureIconOnlyButton(frameForwardButton, "Step (hold Space, . or Right Arrow)");
         configureIconOnlyButton(resetButton, "Replay (R)");
         saveResultsButton.setToolTipText("Save Results (S)");
-        simulatorButton.setToolTipText("Open Simulator");
 
         videoPositionSlider = new ReadOnlySlider(0, 0, 0);
         videoPositionSlider.setOpaque(false);
@@ -320,9 +302,9 @@ public class CellCounterGUI extends JFrame {
         playbackRateValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
         playbackRateValueLabel.setPreferredSize(new Dimension(176, 24));
 
-        tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
+        tuneDetectionButton = createSecondaryButton("Settings", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
         tuneDetectionButton.setFont(FONT_LABEL);
-        tuneDetectionButton.setToolTipText("Tune Detection (T)");
+        tuneDetectionButton.setToolTipText("Settings (T)");
 
         mirrorTrackingCheckBox = new JCheckBox("Mirror Tracking");
         mirrorTrackingCheckBox.setSelected(appService.isMirrorTrackingInRawEnabled());
@@ -336,7 +318,6 @@ public class CellCounterGUI extends JFrame {
         enforceButtonSize(frameForwardButton, 52);
         enforceButtonSize(resetButton, 52);
         enforceButtonSize(saveResultsButton, 146);
-        enforceButtonSize(simulatorButton, 118);
         enforceButtonSize(tuneDetectionButton, 152);
 
         topRow.add(analyzeButton);
@@ -345,7 +326,6 @@ public class CellCounterGUI extends JFrame {
         topRow.add(frameForwardButton);
         topRow.add(resetButton);
         topRow.add(saveResultsButton);
-        topRow.add(simulatorButton);
 
         secondRow.add(videoPositionValueLabel);
         secondRow.add(videoPositionSlider);
@@ -427,17 +407,39 @@ public class CellCounterGUI extends JFrame {
         return wrapper;
     }
 
-    private void bindActions() {
-        simulatorButton.addActionListener(e -> SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true)));
-        tuneDetectionButton.addActionListener(e -> handleTuneDetection());
-        helpButton.addMouseListener(new MouseAdapter() {
+    private JLabel createHeaderLink(String text, AppIcon.Kind iconKind, String tooltip, Runnable action) {
+        JLabel linkLabel = new JLabel("<html><u>" + text + "</u></html>");
+        linkLabel.setFont(FONT_LABEL);
+        linkLabel.setForeground(ACCENT);
+        linkLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        linkLabel.setIcon(new AppIcon(iconKind, ACCENT));
+        linkLabel.setIconTextGap(SPACE_XXS);
+        linkLabel.setToolTipText(tooltip);
+        linkLabel.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (helpButton.isEnabled()) {
-                    openHelpDocumentation();
+                if (linkLabel.isEnabled()) {
+                    action.run();
                 }
             }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                linkLabel.setForeground(TEXT_PRIMARY);
+                linkLabel.setIcon(new AppIcon(iconKind, TEXT_PRIMARY));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                linkLabel.setForeground(ACCENT);
+                linkLabel.setIcon(new AppIcon(iconKind, ACCENT));
+            }
         });
+        return linkLabel;
+    }
+
+    private void bindActions() {
+        tuneDetectionButton.addActionListener(e -> handleTuneDetection());
         analyzeButton.addActionListener(e -> handleAnalyzeVideo());
         playButton.addActionListener(e -> handlePlayPauseToggle());
         frameForwardButton.addActionListener(e -> handleFrameForward());
@@ -1433,11 +1435,11 @@ public class CellCounterGUI extends JFrame {
         if (saveResultsButton != null) {
             saveResultsButton.setEnabled(enabled);
         }
-        if (simulatorButton != null) {
-            simulatorButton.setEnabled(enabled);
-        }
         if (helpButton != null) {
             helpButton.setEnabled(enabled);
+        }
+        if (simulatorLink != null) {
+            simulatorLink.setEnabled(enabled);
         }
         if (tuneDetectionButton != null) {
             tuneDetectionButton.setEnabled(enabled);

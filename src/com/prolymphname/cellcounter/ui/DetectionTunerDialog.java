@@ -155,7 +155,7 @@ public class DetectionTunerDialog {
         scrollPane.getViewport().setBackground(new java.awt.Color(8, 23, 52));
         scrollPane.setOpaque(false);
 
-        CardPanel dialogCard = createCard("Detection Tuner", "Interactive segmentation preview for paused frame", true);
+        CardPanel dialogCard = createCard("Settings", "Interactive segmentation preview for paused frame", true);
         dialogCard.add(scrollPane, BorderLayout.CENTER);
 
         javax.swing.JButton applyButton = createPrimaryButton("Apply Parameters", null);
@@ -181,7 +181,7 @@ public class DetectionTunerDialog {
         root.add(dialogCard, BorderLayout.CENTER);
         root.add(actionRow, BorderLayout.SOUTH);
 
-        JDialog dialog = new JDialog(owner, "Detection Tuner", false);
+        JDialog dialog = new JDialog(owner, "Settings", false);
         dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         dialog.setContentPane(root);
         dialog.setSize(820, 640);
