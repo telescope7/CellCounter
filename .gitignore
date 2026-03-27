@@ -1,3 +1,19 @@
+# Local IDE / tool state
+/.claude/
+/.m2/
+/.DS_Store
+
+# Build / packaging outputs
 /bin/
 /target/
 /packaging/
+/ga-tuning-output/
+
+# Generated analysis exports
+/*_analysis.csv
+/*_footprint.csv
+
+# Common local temp files
+*.log
+*.tmp
+*.swp

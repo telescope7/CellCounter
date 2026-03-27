@@ -1,22 +1,30 @@
 package com.prolymphname.cellcounter.export;
 
-import com.prolymphname.cellcounter.AnalysisLogic;
+import com.prolymphname.cellcounter.analysis.TrackMetricsCalculator;
+import com.prolymphname.cellcounter.trackingadapter.TrackMetrics;
+import com.prolymphname.cellcounter.trackingadapter.TrackedCell;
+import com.prolymphname.cellcounter.trackingadapter.TrackedCellHistoryEntry;
 import com.prolymphname.cellcounter.trackingadapter.TrackingAdapter;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 public class AnalysisExportService {
-    public void saveAnalysisCsv(File file, TrackingAdapter trackingAdapter, ExportMetadata metadata) throws IOException {
-        AnalysisLogic.CentroidTracker tracker = trackingAdapter.getCellTracker();
-        if (tracker == null) {
-            throw new IllegalStateException("Analysis data (tracker) is not available.");
-        }
+    private final TrackMetricsCalculator trackMetricsCalculator;
 
+    public AnalysisExportService() {
+        this(new TrackMetricsCalculator());
+    }
+
+    AnalysisExportService(TrackMetricsCalculator trackMetricsCalculator) {
+        this.trackMetricsCalculator = trackMetricsCalculator;
+    }
+
+    public void saveAnalysisCsv(File file, TrackingAdapter trackingAdapter, ExportMetadata metadata) throws IOException {
+        List<TrackedCell> trackedCells = trackingAdapter.getTrackedCells();
         ExportMetadata safeMetadata = metadata == null ? ExportMetadata.EMPTY : metadata;
         try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
             pw.println(
@@ -24,16 +32,14 @@ public class AnalysisExportService {
                             + "TotalDistance,DistanceToCross,DistanceAfterCross,"
                             + "AvgFrameDistance,MedianFrameDistance,FramesTracked,FramesMissed,Speed(pixels/sec)");
 
-            for (Map.Entry<Integer, AnalysisLogic.Track> entry : getAllTracks(tracker).entrySet()) {
-                int cellID = entry.getKey();
-                AnalysisLogic.Track track = entry.getValue();
-                if (track.history.isEmpty()) {
+            for (TrackedCell trackedCell : trackedCells) {
+                if (!trackedCell.hasHistory()) {
                     continue;
                 }
 
-                Map<String, Object> metrics = trackingAdapter.computeMetricsForTrack(track);
-                int firstFrame = track.startFrame;
-                double firstTime = track.startTime;
+                TrackMetrics metrics = trackMetricsCalculator.calculate(trackedCell, trackingAdapter.getFps());
+                int firstFrame = trackedCell.startFrame();
+                double firstTime = trackedCell.startTime();
                 int crossFrame = -1;
                 double crossTime = -1.0;
 
@@ -41,71 +47,42 @@ public class AnalysisExportService {
                         safeMetadata.getCellType(),
                         safeMetadata.getSubstrate(),
                         safeMetadata.getFlowCondition(),
-                        cellID,
+                        trackedCell.cellId(),
                         firstFrame,
                         firstTime,
                         crossFrame,
                         crossTime,
-                        metricAsDouble(metrics, "TotalDistance"),
-                        metricAsDouble(metrics, "DistanceToCross"),
-                        metricAsDouble(metrics, "DistanceAfterCross"),
-                        metricAsDouble(metrics, "AvgFrameDistance"),
-                        metricAsDouble(metrics, "MedianFrameDistance"),
-                        metricAsInt(metrics, "FramesTracked"),
-                        metricAsInt(metrics, "FramesMissed"),
-                        metricAsDouble(metrics, "Speed"));
+                        metrics.totalDistance(),
+                        metrics.distanceToCross(),
+                        metrics.distanceAfterCross(),
+                        metrics.avgFrameDistance(),
+                        metrics.medianFrameDistance(),
+                        metrics.framesTracked(),
+                        metrics.framesMissed(),
+                        metrics.speed());
             }
         }
     }
 
     public void saveFootprintCsv(File file, TrackingAdapter trackingAdapter, ExportMetadata metadata) throws IOException {
-        AnalysisLogic.CentroidTracker tracker = trackingAdapter.getCellTracker();
-        if (tracker == null) {
-            throw new IllegalStateException("Footprint data (tracker) is not available.");
-        }
-
+        List<TrackedCell> trackedCells = trackingAdapter.getTrackedCells();
         ExportMetadata safeMetadata = metadata == null ? ExportMetadata.EMPTY : metadata;
         try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
             pw.println("CellType,Substrate,FlowCondition,CellID,Frame,UL_X,UL_Y,LR_X,LR_Y");
-            for (Map.Entry<Integer, AnalysisLogic.Track> entry : getAllTracks(tracker).entrySet()) {
-                int cellID = entry.getKey();
-                AnalysisLogic.Track track = entry.getValue();
-                for (AnalysisLogic.HistoryItem item : track.history) {
+            for (TrackedCell trackedCell : trackedCells) {
+                for (TrackedCellHistoryEntry item : trackedCell.history()) {
                     pw.printf("%s,%s,%s,%d,%d,%d,%d,%d,%d%n",
                             safeMetadata.getCellType(),
                             safeMetadata.getSubstrate(),
                             safeMetadata.getFlowCondition(),
-                            cellID,
-                            item.frame,
-                            (int) item.UL.x,
-                            (int) item.UL.y,
-                            (int) item.LR.x,
-                            (int) item.LR.y);
+                            trackedCell.cellId(),
+                            item.frame(),
+                            item.upperLeftX(),
+                            item.upperLeftY(),
+                            item.lowerRightX(),
+                            item.lowerRightY());
                 }
             }
         }
-    }
-
-    private static Map<Integer, AnalysisLogic.Track> getAllTracks(AnalysisLogic.CentroidTracker tracker) {
-        Map<Integer, AnalysisLogic.Track> allTracks = new HashMap<>();
-        allTracks.putAll(tracker.objects);
-        allTracks.putAll(tracker.completeTracks);
-        return allTracks;
-    }
-
-    private static double metricAsDouble(Map<String, Object> metrics, String key) {
-        Object value = metrics.get(key);
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
-        }
-        return 0.0;
-    }
-
-    private static int metricAsInt(Map<String, Object> metrics, String key) {
-        Object value = metrics.get(key);
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        return 0;
     }
 }

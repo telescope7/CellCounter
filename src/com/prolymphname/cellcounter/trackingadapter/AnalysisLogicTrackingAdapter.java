@@ -4,7 +4,6 @@ import com.prolymphname.cellcounter.AnalysisLogic;
 import org.opencv.core.Mat;
 
 import java.util.List;
-import java.util.Map;
 
 public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     private final AnalysisLogic analysisLogic;
@@ -113,12 +112,7 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
-    public AnalysisLogic.CentroidTracker getCellTracker() {
-        return analysisLogic.getCellTracker();
-    }
-
-    @Override
-    public Map<String, Object> computeMetricsForTrack(AnalysisLogic.Track track) {
-        return analysisLogic.computeMetricsForTrack(track);
+    public List<TrackedCell> getTrackedCells() {
+        return analysisLogic.getTrackedCellsSnapshot();
     }
 }

@@ -4,6 +4,62 @@
 	<comment></comment>
 	<projects>
 	</projects>
+	<filteredResources>
+		<filter>
+			<id>1743027000001</id>
+			<name></name>
+			<type>30</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-.git</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1743027000002</id>
+			<name></name>
+			<type>30</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-.m2</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1743027000003</id>
+			<name></name>
+			<type>30</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-.claude</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1743027000004</id>
+			<name></name>
+			<type>30</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-bin</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1743027000005</id>
+			<name></name>
+			<type>30</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-target</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1743027000006</id>
+			<name></name>
+			<type>30</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-packaging</arguments>
+			</matcher>
+		</filter>
+	</filteredResources>
 	<buildSpec>
 		<buildCommand>
 			<name>org.eclipse.jdt.core.javabuilder</name>

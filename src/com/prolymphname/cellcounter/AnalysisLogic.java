@@ -1,8 +1,14 @@
 package com.prolymphname.cellcounter;
 
+import com.prolymphname.cellcounter.analysis.DetectionFrameResult;
+import com.prolymphname.cellcounter.analysis.DisplayFrameRenderer;
+import com.prolymphname.cellcounter.analysis.ForegroundDetectionPipeline;
+import com.prolymphname.cellcounter.analysis.TrackedOverlay;
 import com.prolymphname.cellcounter.trackingadapter.AssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.GreedyAssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.HungarianAssignmentStrategy;
+import com.prolymphname.cellcounter.trackingadapter.TrackedCell;
+import com.prolymphname.cellcounter.trackingadapter.TrackedCellHistoryEntry;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import org.opencv.core.*;
 import org.opencv.videoio.VideoCapture;
@@ -32,6 +38,8 @@ public class AnalysisLogic {
 	private Mat currentRawFrameForDisplay = null;
 	private Mat lastForegroundMaskForDisplay = null;
 	private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
+	private final ForegroundDetectionPipeline foregroundDetectionPipeline = new ForegroundDetectionPipeline();
+	private final DisplayFrameRenderer displayFrameRenderer = new DisplayFrameRenderer();
 
 	private List<Double> trackStartTimes = new ArrayList<>(); // Renamed from crossingTimes
 	private List<Double> speeds = new ArrayList<>();
@@ -541,116 +549,27 @@ public class AnalysisLogic {
 	}
 
 	private Mat processFrame(Mat frameInput, boolean drawOverlaysCurrentlyUnused) {
-		Mat fgmask = new Mat();
-        Mat sourceForBGS = frameInput; // frameInput is already a clone if necessary
-
-        if (referenceFrame != null && !referenceFrame.empty()) {
-            Mat diff = new Mat(); 
-            Core.absdiff(frameInput, referenceFrame, diff); 
-            sourceForBGS = diff;
-        }
-        if (fgbg != null) fgbg.apply(sourceForBGS, fgmask); else { Mat.zeros(frameInput.size(), CvType.CV_8UC1).copyTo(fgmask); }
-        if (sourceForBGS != frameInput) sourceForBGS.release(); // Release diff if it was created
-
-		int kernelSize = trackingConfiguration.getMorphologyKernelSize();
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(kernelSize, kernelSize));
-        Imgproc.morphologyEx(fgmask, fgmask, Imgproc.MORPH_OPEN, kernel, new Point(-1,-1),
-				trackingConfiguration.getMorphologyOpenIterations());
-        Imgproc.morphologyEx(fgmask, fgmask, Imgproc.MORPH_DILATE, kernel, new Point(-1,-1),
-				trackingConfiguration.getMorphologyDilateIterations());
-        kernel.release();
-
-		Mat fgmaskForContours = fgmask.clone();
-		List<MatOfPoint> contours = new ArrayList<>();
-		Imgproc.findContours(fgmaskForContours, contours, new Mat(), Imgproc.RETR_EXTERNAL,
-				Imgproc.CHAIN_APPROX_SIMPLE);
-		fgmaskForContours.release();
-		
-		// Alternative: Histogram Stretching (Normalization)
-		Core.normalize(fgmask, fgmask, 0, 255, Core.NORM_MINMAX);
-			// IMPORTANT: Add thresholding after normalization.
-			Imgproc.threshold(fgmask, fgmask, trackingConfiguration.getNormalizedMaskThreshold(), 255, Imgproc.THRESH_BINARY);
-		if (this.lastForegroundMaskForDisplay != null) {
-			this.lastForegroundMaskForDisplay.release();
-		}
-		this.lastForegroundMaskForDisplay = fgmask.clone();
-
-		List<Rect> rects = new ArrayList<>();
-	    for (MatOfPoint c : contours) {
-		        if (Imgproc.contourArea(c) < trackingConfiguration.getMinContourArea()) { //
-		            c.release();
-		            continue;
-		        }
-	        Rect r = Imgproc.boundingRect(c); //
-
-	        // New check for rectangle circumference
-	        double circumference = 2 * (r.width + r.height);
-		        if (circumference > trackingConfiguration.getMaxRectCircumference()) {
-	            c.release(); // Release contour Mat
-	            // r is a local variable, no need to release an OpenCV Rect object itself
-	            continue; // Skip this rectangle
-	        }
-
-	        rects.add(r);
-	        c.release(); //
-	    }
-	    contours.clear(); //
-	    
-
-		double currentTime = (double) this.frameNumber / this.fps;
-		if (cellTracker != null) {
-			cellTracker.update(rects, currentTime, this.frameNumber, this.fps);
-		}
-
-		if (cellTracker != null && cellTracker.objects != null) {
-			for (Track track : cellTracker.objects.values()) {
-				if (track.centroid == null)
-					continue;
-				// Crossing logic removed, speeds are added if valid from track.instantSpeed
-				// if (!track.crossed && track.centroid.x >= finish_line_x) { ... } // REMOVED
-				// The speeds list is populated directly when track.instantSpeed is
-				// calculated/valid if needed for a graph
-				// But the original request: "The speed calculation remains unchanged."
-				// The `speeds` list in AnalysisLogic was populated when a cell crossed the
-				// finish line.
-				// Now, it needs a new trigger. Let's assume the "Speed Distribution" graph uses
-				// the instantSpeed of all *active* tracks at each frame, or final average
-				// speeds.
-				// For simplicity, let's populate `speeds` with the `instantSpeed` of tracks
-				// that are updated.
-				// This might make the "Speed Distribution" graph very busy.
-				// A better approach might be to collect final average speeds when tracks are
-				// deregistered,
-				// or collect all instantSpeeds and then histogram them.
-				// For now, let's keep `speeds.add(track.instantSpeed)` in
-				// CentroidTracker.update if a track is updated.
-				// Or remove the direct `speeds.add` from `processFrame` and rely on
-				// `getSpeeds()` to compute from tracks later.
-
-				// Let's simplify: The `speeds` list will contain the `instantSpeed` for every
-				// tracked object *every frame it's updated*.
-				// This happens within CentroidTracker.update() if `track.instantSpeed` is
-				// valid.
-				// The old logic: `if (!Double.isNaN(track.instantSpeed) &&
-				// !Double.isInfinite(track.instantSpeed)) { speeds.add(track.instantSpeed); }`
-				// This was inside the `if (!track.crossed ...)` block.
-				// Now, we need to decide when to add to the `speeds` list for the graph.
-				// If the "Speed" graph is to show a distribution of all observed instant
-				// speeds:
-				if (!Double.isNaN(track.instantSpeed) && !Double.isInfinite(track.instantSpeed)
-						&& track.instantSpeed > 0) {
-					// Check if this track was just updated (not missed)
-					if (track.missed == 0) { // Add speed if track was seen this frame
-						this.speeds.add(track.instantSpeed);
-					}
-				}
+		try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
+				frameInput,
+				referenceFrame,
+				fgbg,
+				trackingConfiguration)) {
+			if (this.lastForegroundMaskForDisplay != null) {
+				this.lastForegroundMaskForDisplay.release();
 			}
-		}
-		// The `trackStartTimes` list is populated in CentroidTracker.register().
+			this.lastForegroundMaskForDisplay = detection.mask().clone();
 
-		Mat displayImage = generateDisplayFromState(frameInput, this.displayMOG2Foreground, fgmask);
-		fgmask.release();
-		return displayImage;
+			double currentTime = (double) this.frameNumber / this.fps;
+			if (cellTracker != null) {
+				cellTracker.update(detection.rects(), currentTime, this.frameNumber, this.fps);
+			}
+
+			recordObservedInstantSpeeds();
+
+			Mat displayImage = renderDisplayFromCurrentState(frameInput, this.displayMOG2Foreground, detection.mask());
+			markRenderedTracksAsExisting();
+			return displayImage;
+		}
 	}
 
 	public Mat previewCurrentFrameForTuning(TrackingConfiguration previewConfiguration, boolean showMaskView) {
@@ -690,16 +609,34 @@ public class AnalysisLogic {
 					continue;
 				}
 
-				List<Rect> previewRects = detectRectsForPreview(frame, fgmask, cfg, previewSubtractor);
-				if (frameIndex == targetFrameIndex) {
-					previewDisplay = renderPreviewDisplay(frame, fgmask, previewRects, showMaskView);
+				try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
+						frame,
+						referenceFrame,
+						previewSubtractor,
+						cfg)) {
+					if (frameIndex == targetFrameIndex) {
+						previewDisplay = displayFrameRenderer.renderPreviewFrame(
+								frame,
+								detection.mask(),
+								detection.rects(),
+								showMaskView);
+					}
 				}
 				frameIndex++;
 			}
 
 			if (previewDisplay == null && currentRawFrameForDisplay != null && !currentRawFrameForDisplay.empty()) {
-				List<Rect> previewRects = detectRectsForPreview(currentRawFrameForDisplay, fgmask, cfg, previewSubtractor);
-				previewDisplay = renderPreviewDisplay(currentRawFrameForDisplay, fgmask, previewRects, showMaskView);
+				try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
+						currentRawFrameForDisplay,
+						referenceFrame,
+						previewSubtractor,
+						cfg)) {
+					previewDisplay = displayFrameRenderer.renderPreviewFrame(
+							currentRawFrameForDisplay,
+							detection.mask(),
+							detection.rects(),
+							showMaskView);
+				}
 			}
 		} finally {
 			frame.release();
@@ -708,155 +645,6 @@ public class AnalysisLogic {
 		}
 
 		return previewDisplay;
-	}
-
-	private List<Rect> detectRectsForPreview(
-			Mat frameInput,
-			Mat fgmaskOut,
-			TrackingConfiguration cfg,
-			BackgroundSubtractorMOG2 subtractor) {
-		Mat sourceForBGS = frameInput;
-		if (referenceFrame != null && !referenceFrame.empty()) {
-			Mat diff = new Mat();
-			Core.absdiff(frameInput, referenceFrame, diff);
-			sourceForBGS = diff;
-		}
-		subtractor.apply(sourceForBGS, fgmaskOut);
-		if (sourceForBGS != frameInput) {
-			sourceForBGS.release();
-		}
-
-		int kernelSize = cfg.getMorphologyKernelSize();
-		Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(kernelSize, kernelSize));
-		Imgproc.morphologyEx(fgmaskOut, fgmaskOut, Imgproc.MORPH_OPEN, kernel, new Point(-1, -1),
-				cfg.getMorphologyOpenIterations());
-		Imgproc.morphologyEx(fgmaskOut, fgmaskOut, Imgproc.MORPH_DILATE, kernel, new Point(-1, -1),
-				cfg.getMorphologyDilateIterations());
-		kernel.release();
-
-		Mat contourMask = fgmaskOut.clone();
-		Mat hierarchy = new Mat();
-		List<MatOfPoint> contours = new ArrayList<>();
-		Imgproc.findContours(contourMask, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-		contourMask.release();
-		hierarchy.release();
-
-		Core.normalize(fgmaskOut, fgmaskOut, 0, 255, Core.NORM_MINMAX);
-		Imgproc.threshold(fgmaskOut, fgmaskOut, cfg.getNormalizedMaskThreshold(), 255, Imgproc.THRESH_BINARY);
-
-		List<Rect> rects = new ArrayList<>();
-		for (MatOfPoint contour : contours) {
-			if (Imgproc.contourArea(contour) < cfg.getMinContourArea()) {
-				contour.release();
-				continue;
-			}
-
-			Rect rect = Imgproc.boundingRect(contour);
-			double circumference = 2 * (rect.width + rect.height);
-			if (circumference <= cfg.getMaxRectCircumference()) {
-				rects.add(rect);
-			}
-			contour.release();
-		}
-		contours.clear();
-		return rects;
-	}
-
-	private Mat renderPreviewDisplay(Mat sourceFrame, Mat fgmask, List<Rect> rects, boolean showMaskView) {
-		Mat display;
-		if (showMaskView) {
-			display = new Mat();
-			Imgproc.cvtColor(fgmask, display, Imgproc.COLOR_GRAY2BGR);
-		} else {
-			display = sourceFrame.clone();
-		}
-
-		Scalar detectionColor = new Scalar(58, 233, 197);
-		for (Rect rect : rects) {
-			Imgproc.rectangle(display, rect.tl(), rect.br(), detectionColor, 1);
-			Point centroid = new Point(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-			Imgproc.circle(display, centroid, 2, detectionColor, 1);
-		}
-
-		Imgproc.putText(display, "Preview detections: " + rects.size(),
-				new Point(12, 24), Imgproc.FONT_HERSHEY_SIMPLEX, 0.6, detectionColor, 2);
-		return display;
-	}
-// } // End of AnalysisLogic class
-
-	public Map<String, Object> computeMetricsForTrack(Track track) {
-		Map<String, Object> metrics = new HashMap<>();
-		// ... (calculate TotalDistance, AvgFrameDistance, MedianFrameDistance,
-		// FramesTracked, FramesMissed, Speed as before)
-		// Speed here could be average speed over track lifetime.
-		// instantSpeed is per-frame.
-		// For now, keep existing metric calculations that don't rely on finish line.
-
-		List<HistoryItem> history = track.history;
-		if (history.isEmpty()) {
-			metrics.put("TotalDistance", 0.0);
-			metrics.put("DistanceToCross", 0.0);
-			metrics.put("DistanceAfterCross", 0.0);
-			metrics.put("AvgFrameDistance", 0.0);
-			metrics.put("MedianFrameDistance", 0.0);
-			metrics.put("FramesTracked", 0);
-			metrics.put("FramesMissed", track.missed);
-			metrics.put("Speed", 0.0);
-			metrics.put("Speed (Overall Avg)", 0.0);
-			return metrics;
-		}
-
-		double totalDistance = 0;
-		Point prevHistCentroid = null;
-		if (!history.isEmpty()) {
-			prevHistCentroid = new Point((history.get(0).UL.x + history.get(0).LR.x) / 2.0,
-					(history.get(0).UL.y + history.get(0).LR.y) / 2.0);
-			for (int i = 1; i < history.size(); i++) {
-				Point currHistCentroid = new Point((history.get(i).UL.x + history.get(i).LR.x) / 2.0,
-						(history.get(i).UL.y + history.get(i).LR.y) / 2.0);
-				totalDistance += Math.hypot(currHistCentroid.x - prevHistCentroid.x,
-						currHistCentroid.y - prevHistCentroid.y);
-				prevHistCentroid = currHistCentroid;
-			}
-		}
-
-		List<Double> moveDists = new ArrayList<>();
-		if (history.size() > 1) {
-			prevHistCentroid = new Point((history.get(0).UL.x + history.get(0).LR.x) / 2.0,
-					(history.get(0).UL.y + history.get(0).LR.y) / 2.0);
-			for (int i = 1; i < history.size(); i++) {
-				Point currHistCentroid = new Point((history.get(i).UL.x + history.get(i).LR.x) / 2.0,
-						(history.get(i).UL.y + history.get(i).LR.y) / 2.0);
-				moveDists.add(
-						Math.hypot(currHistCentroid.x - prevHistCentroid.x, currHistCentroid.y - prevHistCentroid.y));
-				prevHistCentroid = currHistCentroid;
-			}
-		}
-
-		double avgMove = moveDists.stream().mapToDouble(d -> d).average().orElse(0);
-		double medianMove = 0;
-		if (!moveDists.isEmpty()) {
-			Collections.sort(moveDists);
-			int mid = moveDists.size() / 2;
-			medianMove = (moveDists.size() % 2 == 0) ? (moveDists.get(mid - 1) + moveDists.get(mid)) / 2.0
-					: moveDists.get(mid);
-		}
-
-		int framesTracked = history.size();
-		// Total time tracked based on frames and FPS
-		double timeElapsedTracked = framesTracked > 0 ? (double) framesTracked / this.fps : 0;
-		double overallSpeed = timeElapsedTracked > 0 ? totalDistance / timeElapsedTracked : 0;
-
-		metrics.put("TotalDistance", totalDistance);
-		metrics.put("DistanceToCross", 0.0);
-		metrics.put("DistanceAfterCross", 0.0);
-		metrics.put("AvgFrameDistance", avgMove);
-		metrics.put("MedianFrameDistance", medianMove);
-		metrics.put("FramesTracked", framesTracked);
-		metrics.put("FramesMissed", track.missed);
-		metrics.put("Speed", overallSpeed);
-		metrics.put("Speed (Overall Avg)", overallSpeed); // Clarify this is overall average
-		return metrics;
 	}
 
 	// Add this new method to AnalysisLogic.java
@@ -880,10 +668,8 @@ public class AnalysisLogic {
 					return;
 				}
 
-				// generateDisplayFromState expects a Mat it can use or clone.
-				// rotatedFrame here is a fresh Mat (or same as rawCloneForRotation if angle=0)
-					Mat newDisplayFrame = generateDisplayFromState(rotatedFrame, this.displayMOG2Foreground,
-							this.lastForegroundMaskForDisplay);
+				Mat newDisplayFrame = renderDisplayFromCurrentState(rotatedFrame, this.displayMOG2Foreground,
+						this.lastForegroundMaskForDisplay);
 
 				if (this.lastProcessedFrame != null) {
 					this.lastProcessedFrame.release();
@@ -914,54 +700,58 @@ public class AnalysisLogic {
 		}
 	}
 
-	private Mat generateDisplayFromState(Mat rotatedFrameInput, boolean showMaskView, Mat precomputedMask) {
-		Mat displayOutput;
+	private void recordObservedInstantSpeeds() {
+		if (cellTracker == null || cellTracker.objects == null) {
+			return;
+		}
+		for (Track track : cellTracker.objects.values()) {
+			if (track.centroid == null) {
+				continue;
+			}
+			if (!Double.isNaN(track.instantSpeed) && !Double.isInfinite(track.instantSpeed)
+					&& track.instantSpeed > 0 && track.missed == 0) {
+				this.speeds.add(track.instantSpeed);
+			}
+		}
+	}
+
+	private Mat renderDisplayFromCurrentState(Mat sourceFrame, boolean showMaskView, Mat precomputedMask) {
 		Mat maskForDisplay = precomputedMask;
 		boolean releaseMaskForDisplay = false;
 		if (maskForDisplay == null || maskForDisplay.empty()) {
-			maskForDisplay = Mat.zeros(rotatedFrameInput.size(), CvType.CV_8UC1);
+			maskForDisplay = Mat.zeros(sourceFrame.size(), CvType.CV_8UC1);
 			releaseMaskForDisplay = true;
 		}
-
-		Scalar newTrackColor = new Scalar(0, 0, 255); // Red for new
-		Scalar existingTrackColor = new Scalar(0, 255, 0); // Green for existing
-
-		if (showMaskView) {
-			Mat bgrFgmask = new Mat();
-			Imgproc.cvtColor(maskForDisplay, bgrFgmask, Imgproc.COLOR_GRAY2BGR);
-			displayOutput = bgrFgmask;
-			// Imgproc.line(displayOutput, new Point(finish_line_x, 0), ..., new
-			// Scalar(0,0,255),2); // REMOVED
-		} else {
-			displayOutput = rotatedFrameInput.clone();
-		}
-		if (releaseMaskForDisplay) {
-			maskForDisplay.release();
-		}
-
-		// Draw objects (bounding boxes and IDs) on displayOutput
-		if (cellTracker != null && cellTracker.objects != null) {
-			for (Map.Entry<Integer, Track> entry : cellTracker.objects.entrySet()) {
-				Integer cellID = entry.getKey();
-				Track track = entry.getValue();
-				Point currentCentroid = track.centroid;
-				Scalar boxColor = track.isNewTrack ? newTrackColor : existingTrackColor;
-
-				if (track.bbox != null) {
-					Imgproc.rectangle(displayOutput, track.bbox.tl(), track.bbox.br(), boxColor, 1); // Thicker box
-				}
-				if (currentCentroid != null) {
-					Imgproc.putText(displayOutput, "ID " + cellID,
-							new Point(currentCentroid.x - 10, currentCentroid.y - 10), Imgproc.FONT_HERSHEY_SIMPLEX,
-							0.5, boxColor, 1); // Use boxColor for ID too, or different
-					Imgproc.circle(displayOutput, currentCentroid, 4, boxColor, 1);
-				}
-				if (track.isNewTrack) { // After drawing it as new for the first time
-					track.isNewTrack = false;
-				}
+		try {
+			return displayFrameRenderer.renderTrackedFrame(sourceFrame, showMaskView, maskForDisplay, buildTrackedOverlays());
+		} finally {
+			if (releaseMaskForDisplay) {
+				maskForDisplay.release();
 			}
 		}
-		return displayOutput;
+	}
+
+	private List<TrackedOverlay> buildTrackedOverlays() {
+		List<TrackedOverlay> overlays = new ArrayList<>();
+		if (cellTracker == null || cellTracker.objects == null) {
+			return overlays;
+		}
+		for (Map.Entry<Integer, Track> entry : cellTracker.objects.entrySet()) {
+			Track track = entry.getValue();
+			overlays.add(new TrackedOverlay(entry.getKey(), track.bbox, track.centroid, track.isNewTrack));
+		}
+		return overlays;
+	}
+
+	private void markRenderedTracksAsExisting() {
+		if (cellTracker == null || cellTracker.objects == null) {
+			return;
+		}
+		for (Track track : cellTracker.objects.values()) {
+			if (track.isNewTrack) {
+				track.isNewTrack = false;
+			}
+		}
 	}
 
 	// Accessors
@@ -985,12 +775,32 @@ public class AnalysisLogic {
 		return frameNumber;
 	}
 
-	public CentroidTracker getCellTracker() {
-		return cellTracker;
+	public List<TrackedCell> getTrackedCellsSnapshot() {
+		if (cellTracker == null) {
+			return List.of();
+		}
+		Map<Integer, Track> orderedTracks = new TreeMap<>();
+		orderedTracks.putAll(cellTracker.objects);
+		orderedTracks.putAll(cellTracker.completeTracks);
+
+		List<TrackedCell> snapshot = new ArrayList<>(orderedTracks.size());
+		for (Map.Entry<Integer, Track> entry : orderedTracks.entrySet()) {
+			snapshot.add(toTrackedCell(entry.getKey(), entry.getValue()));
+		}
+		return snapshot;
 	}
 
-	public String getVideoFilename() {
-		return videoFilename;
+	private TrackedCell toTrackedCell(int cellId, Track track) {
+		List<TrackedCellHistoryEntry> historyEntries = new ArrayList<>(track.history.size());
+		for (HistoryItem item : track.history) {
+			historyEntries.add(new TrackedCellHistoryEntry(
+					item.frame,
+					(int) item.UL.x,
+					(int) item.UL.y,
+					(int) item.LR.x,
+					(int) item.LR.y));
+		}
+		return new TrackedCell(cellId, track.startFrame, track.startTime, track.missed, historyEntries);
 	}
 
 }

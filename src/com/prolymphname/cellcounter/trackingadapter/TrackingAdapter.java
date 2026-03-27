@@ -1,10 +1,8 @@
 package com.prolymphname.cellcounter.trackingadapter;
 
-import com.prolymphname.cellcounter.AnalysisLogic;
 import org.opencv.core.Mat;
 
 import java.util.List;
-import java.util.Map;
 
 public interface TrackingAdapter {
     boolean initializeVideo(String videoPath);
@@ -45,7 +43,5 @@ public interface TrackingAdapter {
 
     Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView);
 
-    AnalysisLogic.CentroidTracker getCellTracker();
-
-    Map<String, Object> computeMetricsForTrack(AnalysisLogic.Track track);
+    List<TrackedCell> getTrackedCells();
 }
