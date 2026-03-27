@@ -17,7 +17,7 @@ public class DisplayFrameRenderer {
     private static final Scalar MISSED_TRACK_COLOR = new Scalar(0, 191, 255);
     private static final Scalar OCCLUSION_RISK_COLOR = new Scalar(72, 72, 255);
     private static final Scalar PREVIEW_COLOR = new Scalar(58, 233, 197);
-    private static final Scalar LABEL_BACKGROUND = new Scalar(10, 20, 36);
+    private static final Scalar LABEL_OUTLINE_COLOR = new Scalar(6, 10, 18);
     private static final int TRAIL_POINT_LIMIT = 8;
     private static final double LABEL_FONT_SCALE = 0.375;
     private static final double MATCH_REGION_FILL_ALPHA = 0.18;
@@ -211,11 +211,16 @@ public class DisplayFrameRenderer {
         originY = Math.min(originY, Math.max(labelSize.height + 8.0, displayOutput.rows() - 6.0));
 
         Point textOrigin = new Point(originX, originY);
-        Point boxTopLeft = new Point(textOrigin.x - 5.0, textOrigin.y - labelSize.height - 4.0);
-        Point boxBottomRight = new Point(textOrigin.x + labelSize.width + 8.0, textOrigin.y + baseline[0] + 3.0);
-
-        Imgproc.rectangle(displayOutput, boxTopLeft, boxBottomRight, LABEL_BACKGROUND, Imgproc.FILLED);
-        Imgproc.rectangle(displayOutput, boxTopLeft, new Point(boxTopLeft.x + 4.0, boxBottomRight.y), color, Imgproc.FILLED);
+        Imgproc.putText(
+                displayOutput,
+                label,
+                textOrigin,
+                Imgproc.FONT_HERSHEY_SIMPLEX,
+                LABEL_FONT_SCALE,
+                LABEL_OUTLINE_COLOR,
+                3,
+                Imgproc.LINE_AA,
+                false);
         Imgproc.putText(
                 displayOutput,
                 label,

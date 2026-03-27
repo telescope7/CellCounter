@@ -9,6 +9,7 @@ import com.prolymphname.cellcounter.ui.CardPanel;
 import com.prolymphname.cellcounter.ui.ChartRefreshController;
 import com.prolymphname.cellcounter.ui.DetectionTunerDialog;
 import com.prolymphname.cellcounter.ui.GradientPanel;
+import com.prolymphname.cellcounter.ui.ReadOnlySlider;
 import com.prolymphname.cellcounter.ui.StartupSplashWindow;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -32,6 +33,9 @@ import javax.swing.border.LineBorder;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.event.ItemEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -79,6 +83,9 @@ public class CellCounterGUI extends JFrame {
     private static final long serialVersionUID = 1L;
 
     private static final double DEFAULT_VIDEO_RATE = 1.0;
+    private static final int MASK_FLICKER_INTERVAL_MS = 920;
+    private static final int STEP_HOLD_INITIAL_DELAY_MS = 260;
+    private static final int STEP_HOLD_REPEAT_DELAY_MS = 90;
 
     private final CellCounterApplicationService appService;
     private final ChartRefreshController chartRefreshController = new ChartRefreshController();
@@ -88,7 +95,9 @@ public class CellCounterGUI extends JFrame {
 
     private JLabel videoLabel;
     private JLabel playbackRateValueLabel;
+    private JPanel pipelineStateChip;
     private JLabel pipelineStateLabel;
+    private JLabel pipelineStateDotLabel;
     private ChartPanel trackStartTimeChartPanel;
     private ChartPanel speedDistributionChartPanel;
 
@@ -100,7 +109,7 @@ public class CellCounterGUI extends JFrame {
     private JButton saveResultsButton;
     private JButton simulatorButton;
     private JButton tuneDetectionButton;
-    private JButton helpButton;
+    private JLabel helpButton;
     private JCheckBox mog2ViewCheckBox;
     private JCheckBox showTrackTrailsCheckBox;
     private JCheckBox showMatchRegionCheckBox;
@@ -114,6 +123,11 @@ public class CellCounterGUI extends JFrame {
     private int reusableVideoImageType = -1;
 
     private Timer videoTimer;
+    private Timer maskFlickerTimer;
+    private Timer stepKeyRepeatTimer;
+    private boolean maskFlickerPhaseShowsMask = false;
+    private boolean maskFlickerSuspended = false;
+    private boolean stepKeyHeld = false;
 
     private final Icon playIcon = new AppIcon(AppIcon.Kind.PLAY, Color.WHITE);
     private final Icon pauseIcon = new AppIcon(AppIcon.Kind.PAUSE, Color.WHITE);
@@ -161,8 +175,9 @@ public class CellCounterGUI extends JFrame {
         root.add(body, BorderLayout.CENTER);
 
         bindActions();
+        bindKeyboardShortcuts();
         setInitialControlState();
-        setPipelineState("Idle", CHIP_IDLE);
+        setPipelineState("Waiting for file", CHIP_IDLE);
         setPlayButtonPlaying(false);
 
         videoTimer = new Timer(33, e -> {
@@ -170,11 +185,24 @@ public class CellCounterGUI extends JFrame {
                 updateFrame(false);
             }
         });
+        maskFlickerTimer = new Timer(MASK_FLICKER_INTERVAL_MS, e -> advanceMaskFlickerPhase());
+        maskFlickerTimer.setInitialDelay(MASK_FLICKER_INTERVAL_MS);
+        stepKeyRepeatTimer = new Timer(STEP_HOLD_REPEAT_DELAY_MS, e -> triggerStepButtonFromKeyboard());
+        stepKeyRepeatTimer.setInitialDelay(STEP_HOLD_INITIAL_DELAY_MS);
 
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
+                if (maskFlickerTimer != null) {
+                    maskFlickerTimer.stop();
+                }
+                releaseStepKeyHold();
                 appService.releaseVideo();
+            }
+
+            @Override
+            public void windowDeactivated(WindowEvent e) {
+                releaseStepKeyHold();
             }
         });
 
@@ -196,17 +224,48 @@ public class CellCounterGUI extends JFrame {
         titleGroup.setLayout(new BoxLayout(titleGroup, BoxLayout.Y_AXIS));
         titleGroup.add(title);
 
-        pipelineStateLabel = createChipLabel("Idle", CHIP_IDLE);
-        helpButton = createSecondaryButton("Help", new AppIcon(AppIcon.Kind.HELP, Color.WHITE));
+        helpButton = new JLabel("<html><u>Help</u></html>");
         helpButton.setFont(FONT_LABEL);
-        enforceButtonSize(helpButton, 94);
+        helpButton.setForeground(ACCENT);
+        helpButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        helpButton.setIcon(new AppIcon(AppIcon.Kind.HELP, ACCENT));
+        helpButton.setIconTextGap(SPACE_XXS);
+        helpButton.setToolTipText("Open documentation (H)");
+        helpButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                helpButton.setForeground(TEXT_PRIMARY);
+                helpButton.setIcon(new AppIcon(AppIcon.Kind.HELP, TEXT_PRIMARY));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                helpButton.setForeground(ACCENT);
+                helpButton.setIcon(new AppIcon(AppIcon.Kind.HELP, ACCENT));
+            }
+        });
+
+        pipelineStateDotLabel = new JLabel("\u25CF");
+        pipelineStateDotLabel.setFont(FONT_BUTTON);
+        pipelineStateDotLabel.setForeground(Color.WHITE);
+
+        pipelineStateLabel = new JLabel("Waiting for file");
+        pipelineStateLabel.setFont(FONT_BUTTON);
+        pipelineStateLabel.setForeground(Color.WHITE);
+
+        pipelineStateChip = new JPanel(new FlowLayout(FlowLayout.CENTER, SPACE_XXS, 0));
+        pipelineStateChip.setOpaque(true);
+        pipelineStateChip.setBackground(CHIP_IDLE);
+        pipelineStateChip.setBorder(new EmptyBorder(SPACE_XXS, SPACE_S, SPACE_XXS, SPACE_S));
+        pipelineStateChip.add(pipelineStateDotLabel);
+        pipelineStateChip.add(pipelineStateLabel);
 
         JPanel statusGroup = new JPanel();
         statusGroup.setOpaque(false);
         statusGroup.setLayout(new BoxLayout(statusGroup, BoxLayout.X_AXIS));
         statusGroup.add(helpButton);
         statusGroup.add(Box.createHorizontalStrut(SPACE_XS));
-        statusGroup.add(pipelineStateLabel);
+        statusGroup.add(pipelineStateChip);
 
         header.add(titleGroup, BorderLayout.WEST);
         header.add(statusGroup, BorderLayout.EAST);
@@ -233,20 +292,25 @@ public class CellCounterGUI extends JFrame {
         saveResultsButton = createPrimaryButton("Save Results", new AppIcon(AppIcon.Kind.FILE, Color.WHITE));
         simulatorButton = createSecondaryButton("Simulator", new AppIcon(AppIcon.Kind.SIMULATOR, Color.WHITE));
 
-        playButton.setToolTipText("Play / Pause");
+        analyzeButton.setToolTipText("Open Video (O)");
+        fastButton.setToolTipText("Fast Analyze (F)");
+        playButton.setToolTipText("Play / Pause (P or K, Esc to pause)");
         playButton.setHorizontalTextPosition(SwingConstants.LEFT);
         playButton.setIconTextGap(SPACE_XS);
-        configureIconOnlyButton(frameForwardButton, "Step");
-        configureIconOnlyButton(resetButton, "Replay");
+        configureIconOnlyButton(frameForwardButton, "Step (hold Space, . or Right Arrow)");
+        configureIconOnlyButton(resetButton, "Replay (R)");
+        saveResultsButton.setToolTipText("Save Results (S)");
+        simulatorButton.setToolTipText("Open Simulator");
 
-        videoPositionSlider = new JSlider(0, 0, 0);
+        videoPositionSlider = new ReadOnlySlider(0, 0, 0);
         videoPositionSlider.setOpaque(false);
         videoPositionSlider.setPreferredSize(new Dimension(260, 28));
         videoPositionSlider.setMaximumSize(new Dimension(260, 28));
+        videoPositionSlider.setToolTipText("Frame progress");
         videoPositionValueLabel = createChipLabel(formatFrameChipText(0, 0), CHIP_IDLE);
         videoPositionValueLabel.setFont(FONT_LABEL);
         videoPositionValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
-        videoPositionValueLabel.setPreferredSize(new Dimension(124, 24));
+        videoPositionValueLabel.setPreferredSize(new Dimension(156, 24));
 
         playbackRateSlider = new JSlider(10, 500, 100);
         playbackRateSlider.setOpaque(false);
@@ -262,9 +326,10 @@ public class CellCounterGUI extends JFrame {
 
         tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
         tuneDetectionButton.setFont(FONT_LABEL);
+        tuneDetectionButton.setToolTipText("Tune Detection (T)");
         mog2ViewCheckBox = new JCheckBox("Mask View");
         mog2ViewCheckBox.setSelected(false);
-        mog2ViewCheckBox.setToolTipText("Show the current foreground mask instead of the source frame.");
+        mog2ViewCheckBox.setToolTipText("Show mask flicker overlay (M).");
         styleConfigCheckBox(mog2ViewCheckBox);
         mog2ViewCheckBox.setFont(FONT_LABEL);
 
@@ -356,7 +421,14 @@ public class CellCounterGUI extends JFrame {
     private void bindActions() {
         simulatorButton.addActionListener(e -> SwingUtilities.invokeLater(() -> new CellSimulationGUI().setVisible(true)));
         tuneDetectionButton.addActionListener(e -> handleTuneDetection());
-        helpButton.addActionListener(e -> openHelpDocumentation());
+        helpButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (helpButton.isEnabled()) {
+                    openHelpDocumentation();
+                }
+            }
+        });
         analyzeButton.addActionListener(e -> handleAnalyzeVideo());
         playButton.addActionListener(e -> handlePlayPauseToggle());
         frameForwardButton.addActionListener(e -> handleFrameForward());
@@ -368,6 +440,160 @@ public class CellCounterGUI extends JFrame {
         showMatchRegionCheckBox.addItemListener(e -> handleMatchRegionToggle());
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
         videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
+    }
+
+    private void bindKeyboardShortcuts() {
+        JRootPane rootPane = getRootPane();
+        if (rootPane == null) {
+            return;
+        }
+        InputMap inputMap = rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = rootPane.getActionMap();
+
+        Action pressStepAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                handleSpaceStepPressed();
+            }
+        };
+        Action releaseStepAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                handleSpaceStepReleased();
+            }
+        };
+        Action singleStepAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handleFrameForward();
+                }
+            }
+        };
+        Action togglePlayPauseAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handlePlayPauseToggle();
+                }
+            }
+        };
+        Action pauseOnlyAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut() && videoPlaying && !paused) {
+                    handlePlayPauseToggle();
+                }
+            }
+        };
+        Action openVideoAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handleAnalyzeVideo();
+                }
+            }
+        };
+        Action fastAnalyzeAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handleFastAnalyze();
+                }
+            }
+        };
+        Action resetAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handleResetVideo();
+                }
+            }
+        };
+        Action saveResultsAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handleSaveResults();
+                }
+            }
+        };
+        Action tuneDetectionAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    handleTuneDetection();
+                }
+            }
+        };
+        Action toggleMaskViewAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut() && mog2ViewCheckBox != null && mog2ViewCheckBox.isEnabled()) {
+                    mog2ViewCheckBox.setSelected(!mog2ViewCheckBox.isSelected());
+                }
+            }
+        };
+        Action helpAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (shouldHandleGlobalShortcut()) {
+                    openHelpDocumentation();
+                }
+            }
+        };
+
+        registerSpaceStepBindings(
+                inputMap,
+                actionMap,
+                pressStepAction,
+                releaseStepAction);
+        registerSpaceStepBindings(
+                frameForwardButton.getInputMap(JComponent.WHEN_FOCUSED),
+                frameForwardButton.getActionMap(),
+                pressStepAction,
+                releaseStepAction);
+
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_PERIOD, 0, true),
+                "step-single-period", singleStepAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true),
+                "step-single-right", singleStepAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_P, 0, true),
+                "toggle-play-p", togglePlayPauseAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_K, 0, true),
+                "toggle-play-k", togglePlayPauseAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0, true),
+                "pause-only", pauseOnlyAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_O, 0, true),
+                "open-video", openVideoAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_F, 0, true),
+                "fast-analyze", fastAnalyzeAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_R, 0, true),
+                "reset-video", resetAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_S, 0, true),
+                "save-results", saveResultsAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_T, 0, true),
+                "tune-detection", tuneDetectionAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_M, 0, true),
+                "toggle-mask-view", toggleMaskViewAction);
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_H, 0, true),
+                "open-help", helpAction);
+    }
+
+    private void registerSpaceStepBindings(
+            InputMap inputMap,
+            ActionMap actionMap,
+            Action pressStepAction,
+            Action releaseStepAction) {
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0, false), "step-space-press");
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0, true), "step-space-release");
+        actionMap.put("step-space-press", pressStepAction);
+        actionMap.put("step-space-release", releaseStepAction);
+    }
+
+    private void registerWindowShortcut(InputMap inputMap, ActionMap actionMap, KeyStroke keyStroke, String actionKey, Action action) {
+        inputMap.put(keyStroke, actionKey);
+        actionMap.put(actionKey, action);
     }
 
     private void setInitialControlState() {
@@ -393,7 +619,60 @@ public class CellCounterGUI extends JFrame {
             setPlayButtonPlaying(false);
             setPipelineState("Paused", CHIP_WARNING);
         }
+        suspendMaskFlicker();
         openDetectionTunerDialog();
+    }
+
+    private void handleSpaceStepPressed() {
+        if (stepKeyHeld || !shouldHandleSpaceStepShortcut()) {
+            return;
+        }
+        stepKeyHeld = true;
+        triggerStepButtonFromKeyboard();
+        if (stepKeyRepeatTimer != null) {
+            stepKeyRepeatTimer.restart();
+        }
+    }
+
+    private void handleSpaceStepReleased() {
+        releaseStepKeyHold();
+    }
+
+    private boolean shouldHandleSpaceStepShortcut() {
+        if (frameForwardButton == null || !frameForwardButton.isEnabled() || !shouldHandleGlobalShortcut()) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean shouldHandleGlobalShortcut() {
+        if (!isActive()) {
+            return false;
+        }
+        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (focusOwner instanceof JTextField
+                || focusOwner instanceof JTextArea
+                || focusOwner instanceof JPasswordField
+                || focusOwner instanceof JFormattedTextField
+                || focusOwner instanceof JComboBox<?>) {
+            return false;
+        }
+        return true;
+    }
+
+    private void triggerStepButtonFromKeyboard() {
+        if (!stepKeyHeld || frameForwardButton == null || !frameForwardButton.isEnabled()) {
+            releaseStepKeyHold();
+            return;
+        }
+        frameForwardButton.doClick(0);
+    }
+
+    private void releaseStepKeyHold() {
+        stepKeyHeld = false;
+        if (stepKeyRepeatTimer != null) {
+            stepKeyRepeatTimer.stop();
+        }
     }
 
     private void openDetectionTunerDialog() {
@@ -412,6 +691,7 @@ public class CellCounterGUI extends JFrame {
                 updated -> {
                     appService.setTrackingConfiguration(updated);
                     mog2ViewCheckBox.setSelected(false);
+                    stopMaskFlickerAndRestoreVideo();
                     appService.setDisplayMOG2Foreground(false);
                     refreshCurrentVideoFrame();
                     refreshChartsNow();
@@ -421,7 +701,10 @@ public class CellCounterGUI extends JFrame {
                     setPlayButtonPlaying(false);
                     setPipelineState("Configured", CHIP_ACTIVE);
                 },
-                this::refreshCurrentVideoFrame)
+                () -> {
+                    resumeMaskFlickerIfNeeded();
+                    refreshCurrentVideoFrame();
+                })
                 .open();
     }
 
@@ -606,10 +889,11 @@ public class CellCounterGUI extends JFrame {
             paused = true;
             setPlayButtonPlaying(false);
             mog2ViewCheckBox.setSelected(false);
+            stopMaskFlickerAndRestoreVideo();
             playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
             updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
             syncChartRefreshIntervalWithVideo();
-            setPipelineState("Loaded", CHIP_ACTIVE);
+            setPipelineState("Ready", CHIP_ACTIVE);
 
             Mat firstFrame = appService.getLastProcessedFrame();
             if (firstFrame != null && !firstFrame.empty()) {
@@ -628,7 +912,7 @@ public class CellCounterGUI extends JFrame {
         videoPlaying = false;
         paused = false;
         setPlayButtonPlaying(false);
-        setPipelineState("Idle", CHIP_IDLE);
+        setPipelineState("Waiting for file", CHIP_IDLE);
         refreshVideoPositionControls();
 
         JOptionPane.showMessageDialog(this, "Error opening or initializing video file.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -702,7 +986,7 @@ public class CellCounterGUI extends JFrame {
         paused = true;
         setPlayButtonPlaying(false);
         mog2ViewCheckBox.setSelected(false);
-        appService.setDisplayMOG2Foreground(false);
+        stopMaskFlickerAndRestoreVideo();
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
         updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
 
@@ -718,7 +1002,7 @@ public class CellCounterGUI extends JFrame {
                     JOptionPane.ERROR_MESSAGE);
         }
 
-        setPipelineState("Loaded", CHIP_ACTIVE);
+        setPipelineState("Ready", CHIP_ACTIVE);
         syncChartRefreshIntervalWithVideo();
         refreshChartsNow();
         refreshVideoPositionControls();
@@ -795,16 +1079,15 @@ public class CellCounterGUI extends JFrame {
 
     private void handleMOG2Toggle(ItemEvent e) {
         if (!appService.isVideoSuccessfullyInitialized()) {
+            stopMaskFlickerAndRestoreVideo();
             return;
         }
 
-        boolean showMask = (e.getStateChange() == ItemEvent.SELECTED);
-        appService.setDisplayMOG2Foreground(showMask);
-        Mat currentDisplayMat = appService.getLastProcessedFrame();
-        if (currentDisplayMat != null && !currentDisplayMat.empty()) {
-            showFrame(currentDisplayMat);
+        if (e.getStateChange() == ItemEvent.SELECTED) {
+            startMaskFlicker();
+        } else {
+            stopMaskFlickerAndRestoreVideo();
         }
-        videoLabel.repaint();
     }
 
     private void handleTrackTrailsToggle() {
@@ -835,6 +1118,7 @@ public class CellCounterGUI extends JFrame {
         setPlayButtonPlaying(false);
         setPipelineState("Fast Analyze", CHIP_WARNING);
 
+        suspendMaskFlicker();
         appService.resetAnalysisForCurrentVideo();
         syncChartRefreshIntervalWithVideo();
         int totalFrames = appService.getFrameCount();
@@ -888,7 +1172,8 @@ public class CellCounterGUI extends JFrame {
                 }
                 refreshChartsNow();
                 refreshVideoPositionControls();
-                setPipelineState("Loaded", CHIP_ACTIVE);
+                resumeMaskFlickerIfNeeded();
+                setPipelineState("Ready", CHIP_ACTIVE);
                 JOptionPane.showMessageDialog(CellCounterGUI.this, "Fast Analysis Complete.", "Done",
                         JOptionPane.INFORMATION_MESSAGE);
                 paused = false;
@@ -934,6 +1219,7 @@ public class CellCounterGUI extends JFrame {
         setPlayButtonPlaying(false);
         setPipelineState("Seeking", CHIP_WARNING);
         setMainControlsEnabled(false);
+        suspendMaskFlicker();
 
         final int targetFrame = selected;
         seekWorker = new SwingWorker<>() {
@@ -963,10 +1249,73 @@ public class CellCounterGUI extends JFrame {
                 } finally {
                     setMainControlsEnabled(true);
                     refreshVideoPositionControls();
+                    resumeMaskFlickerIfNeeded();
                 }
             }
         };
         seekWorker.execute();
+    }
+
+    private void startMaskFlicker() {
+        if (!appService.isVideoSuccessfullyInitialized() || maskFlickerSuspended) {
+            return;
+        }
+        maskFlickerPhaseShowsMask = true;
+        appService.setDisplayMOG2Foreground(true);
+        refreshCurrentVideoFrame();
+        if (maskFlickerTimer != null && !maskFlickerTimer.isRunning()) {
+            maskFlickerTimer.start();
+        }
+    }
+
+    private void stopMaskFlickerAndRestoreVideo() {
+        if (maskFlickerTimer != null) {
+            maskFlickerTimer.stop();
+        }
+        maskFlickerPhaseShowsMask = false;
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            return;
+        }
+        appService.setDisplayMOG2Foreground(false);
+        refreshCurrentVideoFrame();
+    }
+
+    private void advanceMaskFlickerPhase() {
+        if (maskFlickerSuspended || mog2ViewCheckBox == null || !mog2ViewCheckBox.isSelected()
+                || !appService.isVideoSuccessfullyInitialized()) {
+            stopMaskFlickerAndRestoreVideo();
+            return;
+        }
+        maskFlickerPhaseShowsMask = !maskFlickerPhaseShowsMask;
+        appService.setDisplayMOG2Foreground(maskFlickerPhaseShowsMask);
+        refreshCurrentVideoFrame();
+    }
+
+    private void suspendMaskFlicker() {
+        maskFlickerSuspended = true;
+        if (maskFlickerTimer != null) {
+            maskFlickerTimer.stop();
+        }
+        if (appService.isVideoSuccessfullyInitialized()) {
+            appService.setDisplayMOG2Foreground(false);
+        }
+    }
+
+    private void resumeMaskFlickerIfNeeded() {
+        maskFlickerSuspended = false;
+        syncMaskViewAfterFrameReset();
+    }
+
+    private void syncMaskViewAfterFrameReset() {
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            return;
+        }
+        if (mog2ViewCheckBox != null && mog2ViewCheckBox.isSelected()) {
+            startMaskFlicker();
+            return;
+        }
+        appService.setDisplayMOG2Foreground(false);
+        refreshCurrentVideoFrame();
     }
 
     private void handleSaveResults() {
@@ -1024,10 +1373,19 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void setPipelineState(String state, Color color) {
-        pipelineStateLabel.setText(state);
-        pipelineStateLabel.setOpaque(true);
-        pipelineStateLabel.setBackground(color);
-        pipelineStateLabel.setForeground(Color.WHITE);
+        if (pipelineStateLabel != null) {
+            pipelineStateLabel.setText("Status: " + state);
+            pipelineStateLabel.setForeground(Color.WHITE);
+            pipelineStateLabel.setToolTipText("Current application state: " + state);
+        }
+        if (pipelineStateDotLabel != null) {
+            pipelineStateDotLabel.setForeground(Color.WHITE);
+            pipelineStateDotLabel.setToolTipText("Current application state: " + state);
+        }
+        if (pipelineStateChip != null) {
+            pipelineStateChip.setBackground(color);
+            pipelineStateChip.setToolTipText("Current application state: " + state);
+        }
     }
 
     private void openHelpDocumentation() {
