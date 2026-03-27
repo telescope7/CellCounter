@@ -109,6 +109,9 @@ public class CellCounterGUI extends JFrame {
     private JLabel videoPositionValueLabel;
     private boolean suppressVideoPositionEvents = false;
     private SwingWorker<Mat, Void> seekWorker;
+    private BufferedImage reusableVideoImage;
+    private ImageIcon reusableVideoIcon;
+    private int reusableVideoImageType = -1;
 
     private Timer videoTimer;
 
@@ -432,8 +435,7 @@ public class CellCounterGUI extends JFrame {
                 appService.getTrackingConfiguration().getTrackerAlgorithm(),
                 previewFrame -> {
                     if (previewFrame != null && !previewFrame.empty()) {
-                        videoLabel.setIcon(new ImageIcon(matToBufferedImage(previewFrame)));
-                        videoLabel.setText(null);
+                        showFrame(previewFrame);
                     }
                     if (previewFrame != null) {
                         previewFrame.release();
@@ -461,9 +463,7 @@ public class CellCounterGUI extends JFrame {
         }
         Mat frame = appService.getLastProcessedFrame();
         if (frame != null && !frame.empty()) {
-            videoLabel.setIcon(new ImageIcon(matToBufferedImage(frame)));
-            videoLabel.setText(null);
-            videoLabel.repaint();
+            showFrame(frame);
         }
     }
 
@@ -645,8 +645,7 @@ public class CellCounterGUI extends JFrame {
 
             Mat firstFrame = appService.getLastProcessedFrame();
             if (firstFrame != null && !firstFrame.empty()) {
-                videoLabel.setText(null);
-                videoLabel.setIcon(new ImageIcon(matToBufferedImage(firstFrame)));
+                showFrame(firstFrame);
             } else {
                 videoLabel.setIcon(null);
                 videoLabel.setText("Unable to render first frame.");
@@ -743,8 +742,7 @@ public class CellCounterGUI extends JFrame {
         Mat firstFrameAfterReset = appService.getLastProcessedFrame();
 
         if (firstFrameAfterReset != null && !firstFrameAfterReset.empty()) {
-            videoLabel.setIcon(new ImageIcon(matToBufferedImage(firstFrameAfterReset)));
-            videoLabel.setText(null);
+            showFrame(firstFrameAfterReset);
         } else {
             videoLabel.setIcon(null);
             videoLabel.setText("Unable to render frame after reset.");
@@ -789,7 +787,7 @@ public class CellCounterGUI extends JFrame {
     private void updateFrame(boolean forceChartRefresh) {
         Mat frame = appService.processNextFrameForGUI();
         if (frame != null && !frame.empty()) {
-            videoLabel.setIcon(new ImageIcon(matToBufferedImage(frame)));
+            showFrame(frame);
             if (forceChartRefresh) {
                 refreshChartsNow();
             } else {
@@ -836,7 +834,7 @@ public class CellCounterGUI extends JFrame {
         appService.setDisplayMOG2Foreground(showMask);
         Mat currentDisplayMat = appService.getLastProcessedFrame();
         if (currentDisplayMat != null && !currentDisplayMat.empty()) {
-            videoLabel.setIcon(new ImageIcon(matToBufferedImage(currentDisplayMat.clone())));
+            showFrame(currentDisplayMat);
         }
         videoLabel.repaint();
     }
@@ -897,7 +895,7 @@ public class CellCounterGUI extends JFrame {
                 if (!chunks.isEmpty()) {
                     Mat latestFrame = chunks.get(chunks.size() - 1);
                     if (latestFrame != null && !latestFrame.empty()) {
-                        videoLabel.setIcon(new ImageIcon(matToBufferedImage(latestFrame)));
+                        showFrame(latestFrame);
                     }
                     latestFrame.release();
                     refreshChartsIfDue();
@@ -908,7 +906,7 @@ public class CellCounterGUI extends JFrame {
             protected void done() {
                 Mat finalFrame = appService.getLastProcessedFrame();
                 if (finalFrame != null && !finalFrame.empty()) {
-                    videoLabel.setIcon(new ImageIcon(matToBufferedImage(finalFrame)));
+                    showFrame(finalFrame);
                 }
                 refreshChartsNow();
                 refreshVideoPositionControls();
@@ -971,8 +969,7 @@ public class CellCounterGUI extends JFrame {
                 try {
                     Mat seekFrame = get();
                     if (seekFrame != null && !seekFrame.empty()) {
-                        videoLabel.setIcon(new ImageIcon(matToBufferedImage(seekFrame)));
-                        videoLabel.setText(null);
+                        showFrame(seekFrame);
                         refreshChartsNow();
                         setPipelineState(appService.isCaptureActive() ? "Paused" : "Complete",
                                 appService.isCaptureActive() ? CHIP_WARNING : CHIP_ACTIVE);
@@ -1232,27 +1229,41 @@ public class CellCounterGUI extends JFrame {
         return playbackRateSlider.getValue() / 100.0;
     }
 
-    private Image matToBufferedImage(Mat mat) {
+    private void showFrame(Mat mat) {
+        BufferedImage image = matToBufferedImage(mat);
+        if (image == null) {
+            return;
+        }
+        if (reusableVideoIcon == null || reusableVideoIcon.getImage() != image) {
+            reusableVideoIcon = new ImageIcon(image);
+        }
+        if (videoLabel.getIcon() != reusableVideoIcon) {
+            videoLabel.setIcon(reusableVideoIcon);
+        }
+        videoLabel.setText(null);
+        videoLabel.repaint();
+    }
+
+    private BufferedImage matToBufferedImage(Mat mat) {
         if (mat == null || mat.empty()) {
-            BufferedImage placeholder = new BufferedImage(640, 360, BufferedImage.TYPE_3BYTE_BGR);
-            Graphics2D g = placeholder.createGraphics();
-            g.setColor(new Color(7, 19, 40));
-            g.fillRect(0, 0, placeholder.getWidth(), placeholder.getHeight());
-            g.setColor(new Color(202, 221, 245));
-            g.setFont(FONT_BODY);
-            g.drawString("No Image", placeholder.getWidth() / 2 - 28, placeholder.getHeight() / 2);
-            g.dispose();
-            return placeholder;
+            return null;
         }
 
         int type = mat.channels() > 1 ? BufferedImage.TYPE_3BYTE_BGR : BufferedImage.TYPE_BYTE_GRAY;
         int width = Math.max(1, mat.cols());
         int height = Math.max(1, mat.rows());
 
-        BufferedImage image = new BufferedImage(width, height, type);
-        byte[] data = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+        if (reusableVideoImage == null
+                || reusableVideoImage.getWidth() != width
+                || reusableVideoImage.getHeight() != height
+                || reusableVideoImageType != type) {
+            reusableVideoImage = new BufferedImage(width, height, type);
+            reusableVideoImageType = type;
+        }
+
+        byte[] data = ((DataBufferByte) reusableVideoImage.getRaster().getDataBuffer()).getData();
         mat.get(0, 0, data);
-        return image;
+        return reusableVideoImage;
     }
 
     public static void main(String[] args) {
