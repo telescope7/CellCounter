@@ -149,6 +149,26 @@ public class AnalysisExportServiceTest {
         }
 
         @Override
+        public void setDisplayTrackTrails(boolean show) {
+            throw unsupported();
+        }
+
+        @Override
+        public boolean isDisplayTrackTrailsEnabled() {
+            throw unsupported();
+        }
+
+        @Override
+        public void setDisplayMatchRegion(boolean show) {
+            throw unsupported();
+        }
+
+        @Override
+        public boolean isDisplayMatchRegionEnabled() {
+            throw unsupported();
+        }
+
+        @Override
         public void setReferenceFrameForDiff(Mat frame) {
             throw unsupported();
         }

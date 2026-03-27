@@ -84,6 +84,22 @@ public class CellCounterApplicationService {
         trackingAdapter.setDisplayMOG2Foreground(show);
     }
 
+    public void setDisplayTrackTrails(boolean show) {
+        trackingAdapter.setDisplayTrackTrails(show);
+    }
+
+    public boolean isDisplayTrackTrailsEnabled() {
+        return trackingAdapter.isDisplayTrackTrailsEnabled();
+    }
+
+    public void setDisplayMatchRegion(boolean show) {
+        trackingAdapter.setDisplayMatchRegion(show);
+    }
+
+    public boolean isDisplayMatchRegionEnabled() {
+        return trackingAdapter.isDisplayMatchRegionEnabled();
+    }
+
     public void setReferenceFrameForDiff(Mat frame) {
         trackingAdapter.setReferenceFrameForDiff(frame);
     }

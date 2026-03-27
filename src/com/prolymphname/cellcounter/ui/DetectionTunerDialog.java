@@ -8,6 +8,8 @@ import org.opencv.core.Mat;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -46,7 +48,6 @@ public class DetectionTunerDialog {
     private final JFrame owner;
     private final CellCounterApplicationService appService;
     private final TrackingConfiguration initialConfiguration;
-    private final TrackerAlgorithm trackerAlgorithm;
     private final Consumer<Mat> previewConsumer;
     private final Consumer<TrackingConfiguration> applyConsumer;
     private final Runnable closeConsumer;
@@ -55,14 +56,12 @@ public class DetectionTunerDialog {
             JFrame owner,
             CellCounterApplicationService appService,
             TrackingConfiguration initialConfiguration,
-            TrackerAlgorithm trackerAlgorithm,
             Consumer<Mat> previewConsumer,
             Consumer<TrackingConfiguration> applyConsumer,
             Runnable closeConsumer) {
         this.owner = owner;
         this.appService = appService;
         this.initialConfiguration = initialConfiguration;
-        this.trackerAlgorithm = trackerAlgorithm;
         this.previewConsumer = previewConsumer;
         this.applyConsumer = applyConsumer;
         this.closeConsumer = closeConsumer;
@@ -104,6 +103,13 @@ public class DetectionTunerDialog {
         maskPreviewCheck.setSelected(true);
         styleConfigCheckBox(maskPreviewCheck);
 
+        JComboBox<TrackerAlgorithm> trackerAlgorithmCombo = new JComboBox<>(TrackerAlgorithm.values());
+        trackerAlgorithmCombo.setSelectedItem(appliedConfig[0].getTrackerAlgorithm());
+        trackerAlgorithmCombo.setFont(FONT_LABEL);
+        trackerAlgorithmCombo.setToolTipText("Tracker assignment algorithm used during analysis.");
+        trackerAlgorithmCombo.setOpaque(false);
+        trackerAlgorithmCombo.setPreferredSize(new Dimension(220, 28));
+
         JLabel historyValue = createTuningValueChip(mog2HistorySlider.getValue() + " f");
         JLabel varValue = createTuningValueChip(String.valueOf(mog2VarThresholdSlider.getValue()));
         JLabel thresholdValue = createTuningValueChip(maskThresholdSlider.getValue() + " px");
@@ -143,6 +149,7 @@ public class DetectionTunerDialog {
         addTuningRow(form, gbc, "Max Frames Disappeared", maxFramesDisappearedSlider, maxFramesDisappearedValue);
         addTuningRow(form, gbc, "Max Vertical Displacement", maxVerticalDisplacementSlider, maxVerticalDisplacementValue);
         addTuningRow(form, gbc, "Min Horizontal Movement", minHorizontalMovementSlider, minHorizontalMovementValue);
+        addTuningComponentRow(form, gbc, "Tracker Algorithm", trackerAlgorithmCombo);
         addTuningCheckboxRow(form, gbc, detectShadowsCheck);
         addTuningCheckboxRow(form, gbc, maskPreviewCheck);
 
@@ -209,6 +216,7 @@ public class DetectionTunerDialog {
             }
             detectShadowsCheck.setEnabled(enabled);
             maskPreviewCheck.setEnabled(enabled);
+            trackerAlgorithmCombo.setEnabled(enabled);
             applyButton.setEnabled(enabled);
             resetButton.setEnabled(enabled);
             closeButton.setEnabled(true);
@@ -248,6 +256,7 @@ public class DetectionTunerDialog {
             minHorizontalMovementSlider.setValue(
                     clampInt((int) Math.round(appliedConfig[0].getMinHorizontalMovementPixels()), -100, 100));
             detectShadowsCheck.setSelected(appliedConfig[0].isMog2DetectShadows());
+            trackerAlgorithmCombo.setSelectedItem(appliedConfig[0].getTrackerAlgorithm());
             suppressPreview[0] = false;
             updateValueLabels.run();
         };
@@ -266,7 +275,7 @@ public class DetectionTunerDialog {
                 morphologyOpenSlider.getValue(),
                 morphologyDilateSlider.getValue(),
                 maskThresholdSlider.getValue(),
-                trackerAlgorithm).normalized();
+                (TrackerAlgorithm) trackerAlgorithmCombo.getSelectedItem()).normalized();
 
         class PreviewRunner {
             private SwingWorker<Mat, Void> worker;
@@ -359,7 +368,7 @@ public class DetectionTunerDialog {
             TrackingConfiguration updated = buildWorkingConfig.get();
             appliedConfig[0] = updated;
             applyConsumer.accept(updated);
-            statusLabel.setText("Parameters applied. Playback reset to frame 1.");
+            statusLabel.setText("Parameters applied.");
         });
 
         resetButton.addActionListener(e -> {
@@ -425,6 +434,22 @@ public class DetectionTunerDialog {
         JPanel row = new JPanel(new BorderLayout());
         row.setOpaque(false);
         row.add(checkBox, BorderLayout.WEST);
+        form.add(row, gbc);
+        gbc.gridy++;
+    }
+
+    private void addTuningComponentRow(JPanel form, GridBagConstraints gbc, String labelText, JComponent component) {
+        JPanel row = new JPanel(new BorderLayout(SPACE_XS, 0));
+        row.setOpaque(false);
+
+        JLabel label = new JLabel(labelText);
+        label.setFont(FONT_BODY);
+        label.setForeground(TEXT_PRIMARY);
+        label.setPreferredSize(new Dimension(220, 22));
+
+        row.add(label, BorderLayout.WEST);
+        row.add(component, BorderLayout.CENTER);
+
         form.add(row, gbc);
         gbc.gridy++;
     }

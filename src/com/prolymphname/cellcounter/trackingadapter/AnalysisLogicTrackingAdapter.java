@@ -92,6 +92,26 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
+    public void setDisplayTrackTrails(boolean show) {
+        analysisLogic.setDisplayTrackTrails(show);
+    }
+
+    @Override
+    public boolean isDisplayTrackTrailsEnabled() {
+        return analysisLogic.isDisplayTrackTrailsEnabled();
+    }
+
+    @Override
+    public void setDisplayMatchRegion(boolean show) {
+        analysisLogic.setDisplayMatchRegion(show);
+    }
+
+    @Override
+    public boolean isDisplayMatchRegionEnabled() {
+        return analysisLogic.isDisplayMatchRegionEnabled();
+    }
+
+    @Override
     public void setReferenceFrameForDiff(Mat frame) {
         analysisLogic.setReferenceFrameForDiff(frame);
     }

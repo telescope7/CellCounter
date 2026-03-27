@@ -3,6 +3,8 @@ package com.prolymphname.cellcounter;
 import com.prolymphname.cellcounter.analysis.DetectionFrameResult;
 import com.prolymphname.cellcounter.analysis.DisplayFrameRenderer;
 import com.prolymphname.cellcounter.analysis.ForegroundDetectionPipeline;
+import com.prolymphname.cellcounter.analysis.TrackOverlayVisualPolicy;
+import com.prolymphname.cellcounter.analysis.TrackVisualState;
 import com.prolymphname.cellcounter.analysis.TrackedOverlay;
 import com.prolymphname.cellcounter.trackingadapter.AssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.GreedyAssignmentStrategy;
@@ -37,12 +39,16 @@ public class AnalysisLogic {
 	private boolean displayMOG2Foreground = false;
 	private Mat currentRawFrameForDisplay = null;
 	private Mat lastForegroundMaskForDisplay = null;
+	private boolean displayTrackTrails = true;
+	private boolean displayMatchRegion = true;
 	private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
 	private final ForegroundDetectionPipeline foregroundDetectionPipeline = new ForegroundDetectionPipeline();
 	private final DisplayFrameRenderer displayFrameRenderer = new DisplayFrameRenderer();
+	private final TrackOverlayVisualPolicy trackOverlayVisualPolicy = new TrackOverlayVisualPolicy();
 
 	private List<Double> trackStartTimes = new ArrayList<>(); // Renamed from crossingTimes
 	private List<Double> speeds = new ArrayList<>();
+	private static final int MAX_TRAIL_POINTS = 8;
 
 	public static class HistoryItem {
 		public int frame;
@@ -652,51 +658,32 @@ public class AnalysisLogic {
 		boolean changed = (this.displayMOG2Foreground != show);
 		this.displayMOG2Foreground = show;
 
-		if (changed && videoSuccessfullyInitialized && currentRawFrameForDisplay != null
-				&& !currentRawFrameForDisplay.empty()) {
-			Mat rotatedFrame = null;
-			Mat rawCloneForRotation = currentRawFrameForDisplay.clone(); // Clone before rotating
+		if (changed) {
+			rerenderCurrentDisplayFrame();
+		}
+	}
 
-			try {
-				rotatedFrame = rawCloneForRotation;
-				if (rotatedFrame == null || rotatedFrame.empty()) {
-					System.err.println(
-							"Error rotating current raw frame for display toggle in setDisplayMOG2Foreground.");
-					if (this.lastProcessedFrame != null)
-						this.lastProcessedFrame.release();
-					this.lastProcessedFrame = null; // Can't generate new frame
-					return;
-				}
+	public boolean isDisplayTrackTrailsEnabled() {
+		return displayTrackTrails;
+	}
 
-				Mat newDisplayFrame = renderDisplayFromCurrentState(rotatedFrame, this.displayMOG2Foreground,
-						this.lastForegroundMaskForDisplay);
+	public void setDisplayTrackTrails(boolean show) {
+		boolean changed = (this.displayTrackTrails != show);
+		this.displayTrackTrails = show;
+		if (changed) {
+			rerenderCurrentDisplayFrame();
+		}
+	}
 
-				if (this.lastProcessedFrame != null) {
-					this.lastProcessedFrame.release();
-				}
-				this.lastProcessedFrame = newDisplayFrame; // newDisplayFrame takes ownership
+	public boolean isDisplayMatchRegionEnabled() {
+		return displayMatchRegion;
+	}
 
-			} finally {
-				// rawCloneForRotation was the input to rotateImage, its lifecycle is managed by
-				// rotateImage
-				// (i.e., rotateImage returns a new Mat or the input if no rotation).
-				// Here, rawCloneForRotation itself should be released as it was a clone.
-				rawCloneForRotation.release();
-
-				// rotatedFrame is either the same as rawCloneForRotation (if angle=0) or a new
-				// Mat.
-				// If it's new and not assigned to lastProcessedFrame (e.g., newDisplayFrame
-				// took its content via clone),
-				// it needs release. If newDisplayFrame *is* rotatedFrame, then it's fine.
-				// generateDisplayFromState either clones rotatedFrame or uses a converted mask.
-				// So, rotatedFrame (if it was newly created by rotateImage) can be released
-				// here
-				// *after* it has been used by generateDisplayFromState.
-				if (rotatedFrame != null && rotatedFrame != rawCloneForRotation
-						&& rotatedFrame != this.lastProcessedFrame) {
-					rotatedFrame.release();
-				}
-			}
+	public void setDisplayMatchRegion(boolean show) {
+		boolean changed = (this.displayMatchRegion != show);
+		this.displayMatchRegion = show;
+		if (changed) {
+			rerenderCurrentDisplayFrame();
 		}
 	}
 
@@ -722,8 +709,17 @@ public class AnalysisLogic {
 			maskForDisplay = Mat.zeros(sourceFrame.size(), CvType.CV_8UC1);
 			releaseMaskForDisplay = true;
 		}
-		try {
-			return displayFrameRenderer.renderTrackedFrame(sourceFrame, showMaskView, maskForDisplay, buildTrackedOverlays());
+			try {
+				return displayFrameRenderer.renderTrackedFrame(
+						sourceFrame,
+						showMaskView,
+						maskForDisplay,
+						buildTrackedOverlays(),
+						displayTrackTrails,
+						displayMatchRegion,
+						trackingConfiguration.getMinHorizontalMovementPixels(),
+						trackingConfiguration.getMaxVerticalDisplacementPixels(),
+						trackingConfiguration.getMaxAssociationDistancePixels());
 		} finally {
 			if (releaseMaskForDisplay) {
 				maskForDisplay.release();
@@ -736,11 +732,100 @@ public class AnalysisLogic {
 		if (cellTracker == null || cellTracker.objects == null) {
 			return overlays;
 		}
-		for (Map.Entry<Integer, Track> entry : cellTracker.objects.entrySet()) {
+		List<Map.Entry<Integer, Track>> activeEntries = new ArrayList<>(cellTracker.objects.entrySet());
+		boolean[] occlusionRisk = computeOcclusionRisk(activeEntries);
+		for (int i = 0; i < activeEntries.size(); i++) {
+			Map.Entry<Integer, Track> entry = activeEntries.get(i);
 			Track track = entry.getValue();
-			overlays.add(new TrackedOverlay(entry.getKey(), track.bbox, track.centroid, track.isNewTrack));
+			TrackVisualState state = trackOverlayVisualPolicy.resolveState(track.isNewTrack, track.missed);
+			overlays.add(new TrackedOverlay(
+					entry.getKey(),
+					track.bbox,
+					track.centroid,
+					state,
+					track.missed,
+					occlusionRisk[i],
+					buildTrailPoints(track)));
 		}
 		return overlays;
+	}
+
+	private boolean[] computeOcclusionRisk(List<Map.Entry<Integer, Track>> activeEntries) {
+		boolean[] risk = new boolean[activeEntries.size()];
+		double associationDistance = trackingConfiguration.getMaxAssociationDistancePixels();
+		for (int i = 0; i < activeEntries.size(); i++) {
+			for (int j = i + 1; j < activeEntries.size(); j++) {
+				Track first = activeEntries.get(i).getValue();
+				Track second = activeEntries.get(j).getValue();
+				if (trackOverlayVisualPolicy.isOcclusionRisk(
+						first.bbox,
+						first.centroid,
+						second.bbox,
+						second.centroid,
+						associationDistance)) {
+					risk[i] = true;
+					risk[j] = true;
+				}
+			}
+		}
+		return risk;
+	}
+
+	private List<Point> buildTrailPoints(Track track) {
+		if (track == null || track.history == null || track.history.isEmpty()) {
+			return List.of();
+		}
+		int startIndex = Math.max(0, track.history.size() - MAX_TRAIL_POINTS);
+		List<Point> points = new ArrayList<>();
+		for (int i = startIndex; i < track.history.size(); i++) {
+			HistoryItem item = track.history.get(i);
+			double centerX = (item.UL.x + item.LR.x) / 2.0;
+			double centerY = (item.UL.y + item.LR.y) / 2.0;
+			points.add(new Point(centerX, centerY));
+		}
+		if (track.centroid != null && (points.isEmpty() || !samePoint(points.get(points.size() - 1), track.centroid))) {
+			points.add(new Point(track.centroid.x, track.centroid.y));
+		}
+		return points;
+	}
+
+	private boolean samePoint(Point first, Point second) {
+		return first != null
+				&& second != null
+				&& Double.compare(first.x, second.x) == 0
+				&& Double.compare(first.y, second.y) == 0;
+	}
+
+	private void rerenderCurrentDisplayFrame() {
+		if (!videoSuccessfullyInitialized || currentRawFrameForDisplay == null || currentRawFrameForDisplay.empty()) {
+			return;
+		}
+
+		Mat rotatedFrame = null;
+		Mat rawCloneForRotation = currentRawFrameForDisplay.clone();
+		try {
+			rotatedFrame = rawCloneForRotation;
+			if (rotatedFrame == null || rotatedFrame.empty()) {
+				System.err.println("Error re-rendering current frame from display state.");
+				if (this.lastProcessedFrame != null) {
+					this.lastProcessedFrame.release();
+				}
+				this.lastProcessedFrame = null;
+				return;
+			}
+
+			Mat newDisplayFrame = renderDisplayFromCurrentState(rotatedFrame, this.displayMOG2Foreground,
+					this.lastForegroundMaskForDisplay);
+			if (this.lastProcessedFrame != null) {
+				this.lastProcessedFrame.release();
+			}
+			this.lastProcessedFrame = newDisplayFrame;
+		} finally {
+			rawCloneForRotation.release();
+			if (rotatedFrame != null && rotatedFrame != rawCloneForRotation && rotatedFrame != this.lastProcessedFrame) {
+				rotatedFrame.release();
+			}
+		}
 	}
 
 	private void markRenderedTracksAsExisting() {

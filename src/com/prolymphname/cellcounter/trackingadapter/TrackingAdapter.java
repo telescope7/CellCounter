@@ -35,6 +35,14 @@ public interface TrackingAdapter {
 
     void setDisplayMOG2Foreground(boolean show);
 
+    void setDisplayTrackTrails(boolean show);
+
+    boolean isDisplayTrackTrailsEnabled();
+
+    void setDisplayMatchRegion(boolean show);
+
+    boolean isDisplayMatchRegionEnabled();
+
     void setReferenceFrameForDiff(Mat frame);
 
     TrackingConfiguration getTrackingConfiguration();

@@ -4,7 +4,6 @@ import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.export.ExportMetadata;
 import com.prolymphname.cellcounter.simulation.CellSimulationGUI;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
-import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 import com.prolymphname.cellcounter.ui.AppIcon;
 import com.prolymphname.cellcounter.ui.CardPanel;
 import com.prolymphname.cellcounter.ui.ChartRefreshController;
@@ -53,8 +52,8 @@ import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.create
 import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.createChipLabel;
 import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.createPrimaryButton;
 import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.createSecondaryButton;
-import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.createToggleButton;
 import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.enforceButtonSize;
+import static com.prolymphname.cellcounter.ui.CellCounterComponentFactory.styleConfigCheckBox;
 import static com.prolymphname.cellcounter.ui.CellCounterUiTheme.ACCENT;
 import static com.prolymphname.cellcounter.ui.CellCounterUiTheme.ACCENT_DEEP;
 import static com.prolymphname.cellcounter.ui.CellCounterUiTheme.APP_ICON_FILE_NAME;
@@ -102,8 +101,9 @@ public class CellCounterGUI extends JFrame {
     private JButton simulatorButton;
     private JButton tuneDetectionButton;
     private JButton helpButton;
-    private JToggleButton mog2ViewButton;
-    private JComboBox<TrackerAlgorithm> trackerAlgorithmCombo;
+    private JCheckBox mog2ViewCheckBox;
+    private JCheckBox showTrackTrailsCheckBox;
+    private JCheckBox showMatchRegionCheckBox;
     private JSlider playbackRateSlider;
     private JSlider videoPositionSlider;
     private JLabel videoPositionValueLabel;
@@ -262,15 +262,23 @@ public class CellCounterGUI extends JFrame {
 
         tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
         tuneDetectionButton.setFont(FONT_LABEL);
-        mog2ViewButton = createToggleButton("Mask View", new AppIcon(AppIcon.Kind.EYE, Color.WHITE));
+        mog2ViewCheckBox = new JCheckBox("Mask View");
+        mog2ViewCheckBox.setSelected(false);
+        mog2ViewCheckBox.setToolTipText("Show the current foreground mask instead of the source frame.");
+        styleConfigCheckBox(mog2ViewCheckBox);
+        mog2ViewCheckBox.setFont(FONT_LABEL);
 
-        trackerAlgorithmCombo = new JComboBox<>(TrackerAlgorithm.values());
-        trackerAlgorithmCombo.setSelectedItem(appService.getTrackingConfiguration().getTrackerAlgorithm());
-        trackerAlgorithmCombo.setFont(FONT_LABEL);
-        trackerAlgorithmCombo.setPreferredSize(new Dimension(190, 28));
-        trackerAlgorithmCombo.setMaximumSize(new Dimension(190, 28));
-        trackerAlgorithmCombo.setOpaque(false);
-        trackerAlgorithmCombo.setToolTipText("Tracker assignment algorithm");
+        showTrackTrailsCheckBox = new JCheckBox("Show Trails");
+        showTrackTrailsCheckBox.setSelected(appService.isDisplayTrackTrailsEnabled());
+        showTrackTrailsCheckBox.setToolTipText("Display motion tails for tracked cells.");
+        styleConfigCheckBox(showTrackTrailsCheckBox);
+        showTrackTrailsCheckBox.setFont(FONT_LABEL);
+
+        showMatchRegionCheckBox = new JCheckBox("Show Future Match");
+        showMatchRegionCheckBox.setSelected(appService.isDisplayMatchRegionEnabled());
+        showMatchRegionCheckBox.setToolTipText("Display the future matching/search region for each tracked cell.");
+        styleConfigCheckBox(showMatchRegionCheckBox);
+        showMatchRegionCheckBox.setFont(FONT_LABEL);
 
         enforceButtonSize(analyzeButton, 136);
         enforceButtonSize(fastButton, 136);
@@ -280,7 +288,6 @@ public class CellCounterGUI extends JFrame {
         enforceButtonSize(saveResultsButton, 146);
         enforceButtonSize(simulatorButton, 118);
         enforceButtonSize(tuneDetectionButton, 152);
-        enforceButtonSize(mog2ViewButton, 126);
 
         topRow.add(analyzeButton);
         topRow.add(fastButton);
@@ -295,8 +302,9 @@ public class CellCounterGUI extends JFrame {
         secondRow.add(playbackRateValueLabel);
         secondRow.add(playbackRateSlider);
         secondRow.add(tuneDetectionButton);
-        secondRow.add(mog2ViewButton);
-        secondRow.add(trackerAlgorithmCombo);
+        secondRow.add(mog2ViewCheckBox);
+        secondRow.add(showTrackTrailsCheckBox);
+        secondRow.add(showMatchRegionCheckBox);
 
         content.add(topRow);
         content.add(Box.createVerticalStrut(SPACE_XS));
@@ -355,8 +363,9 @@ public class CellCounterGUI extends JFrame {
         resetButton.addActionListener(e -> handleResetVideo());
         fastButton.addActionListener(e -> handleFastAnalyze());
         saveResultsButton.addActionListener(e -> handleSaveResults());
-        mog2ViewButton.addItemListener(this::handleMOG2Toggle);
-        trackerAlgorithmCombo.addActionListener(e -> handleTrackerAlgorithmChange());
+        mog2ViewCheckBox.addItemListener(this::handleMOG2Toggle);
+        showTrackTrailsCheckBox.addItemListener(e -> handleTrackTrailsToggle());
+        showMatchRegionCheckBox.addItemListener(e -> handleMatchRegionToggle());
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
         videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
     }
@@ -366,46 +375,6 @@ public class CellCounterGUI extends JFrame {
         playbackRateValueLabel.setText(formatPlaybackSpeedText(DEFAULT_VIDEO_RATE));
         chartRefreshController.configureForFps(appService.getFps());
         refreshVideoPositionControls();
-    }
-
-    private void handleTrackerAlgorithmChange() {
-        TrackerAlgorithm selected = (TrackerAlgorithm) trackerAlgorithmCombo.getSelectedItem();
-        if (selected == null) return;
-        TrackingConfiguration current = appService.getTrackingConfiguration();
-        if (current.getTrackerAlgorithm() == selected) return;
-
-        TrackingConfiguration updated = new TrackingConfiguration(
-                current.getMaxFramesDisappeared(),
-                current.getMinContourArea(),
-                current.getMaxRectCircumference(),
-                current.getMaxVerticalDisplacementPixels(),
-                current.getMinHorizontalMovementPixels(),
-                current.getMaxAssociationDistancePixels(),
-                current.getMog2HistoryFrames(),
-                current.getMog2VarThreshold(),
-                current.isMog2DetectShadows(),
-                current.getMorphologyKernelSize(),
-                current.getMorphologyOpenIterations(),
-                current.getMorphologyDilateIterations(),
-                current.getNormalizedMaskThreshold(),
-                selected);
-
-        boolean wasPlaying = videoPlaying && !paused;
-        videoTimer.stop();
-        videoPlaying = false;
-        setPlayButtonPlaying(false);
-
-        appService.setTrackingConfiguration(updated);
-
-        if (appService.isVideoSuccessfullyInitialized()) {
-            paused = true;
-            mog2ViewButton.setSelected(false);
-            appService.setDisplayMOG2Foreground(false);
-            refreshCurrentVideoFrame();
-            refreshChartsNow();
-            refreshVideoPositionControls();
-            setPipelineState("Configured", CHIP_ACTIVE);
-        }
     }
 
     private void handleTuneDetection() {
@@ -432,7 +401,6 @@ public class CellCounterGUI extends JFrame {
                 this,
                 appService,
                 appService.getTrackingConfiguration(),
-                appService.getTrackingConfiguration().getTrackerAlgorithm(),
                 previewFrame -> {
                     if (previewFrame != null && !previewFrame.empty()) {
                         showFrame(previewFrame);
@@ -443,7 +411,7 @@ public class CellCounterGUI extends JFrame {
                 },
                 updated -> {
                     appService.setTrackingConfiguration(updated);
-                    mog2ViewButton.setSelected(false);
+                    mog2ViewCheckBox.setSelected(false);
                     appService.setDisplayMOG2Foreground(false);
                     refreshCurrentVideoFrame();
                     refreshChartsNow();
@@ -637,7 +605,7 @@ public class CellCounterGUI extends JFrame {
             videoPlaying = false;
             paused = true;
             setPlayButtonPlaying(false);
-            mog2ViewButton.setSelected(false);
+            mog2ViewCheckBox.setSelected(false);
             playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
             updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
             syncChartRefreshIntervalWithVideo();
@@ -733,7 +701,7 @@ public class CellCounterGUI extends JFrame {
         videoPlaying = false;
         paused = true;
         setPlayButtonPlaying(false);
-        mog2ViewButton.setSelected(false);
+        mog2ViewCheckBox.setSelected(false);
         appService.setDisplayMOG2Foreground(false);
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
         updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
@@ -837,6 +805,16 @@ public class CellCounterGUI extends JFrame {
             showFrame(currentDisplayMat);
         }
         videoLabel.repaint();
+    }
+
+    private void handleTrackTrailsToggle() {
+        appService.setDisplayTrackTrails(showTrackTrailsCheckBox.isSelected());
+        refreshCurrentVideoFrame();
+    }
+
+    private void handleMatchRegionToggle() {
+        appService.setDisplayMatchRegion(showMatchRegionCheckBox.isSelected());
+        refreshCurrentVideoFrame();
     }
 
     private void handleFastAnalyze() {
@@ -1198,8 +1176,14 @@ public class CellCounterGUI extends JFrame {
         if (resetButton != null) {
             resetButton.setEnabled(enabled);
         }
-        if (mog2ViewButton != null) {
-            mog2ViewButton.setEnabled(enabled);
+        if (mog2ViewCheckBox != null) {
+            mog2ViewCheckBox.setEnabled(enabled);
+        }
+        if (showTrackTrailsCheckBox != null) {
+            showTrackTrailsCheckBox.setEnabled(enabled);
+        }
+        if (showMatchRegionCheckBox != null) {
+            showMatchRegionCheckBox.setEnabled(enabled);
         }
         if (saveResultsButton != null) {
             saveResultsButton.setEnabled(enabled);
