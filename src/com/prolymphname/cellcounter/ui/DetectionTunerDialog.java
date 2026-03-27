@@ -3,7 +3,6 @@ package com.prolymphname.cellcounter.ui;
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
-import org.opencv.core.Mat;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -48,7 +47,7 @@ public class DetectionTunerDialog {
     private final JFrame owner;
     private final CellCounterApplicationService appService;
     private final TrackingConfiguration initialConfiguration;
-    private final Consumer<Mat> previewConsumer;
+    private final Consumer<TuningPreviewFrames> previewConsumer;
     private final Consumer<TrackingConfiguration> applyConsumer;
     private final Runnable closeConsumer;
 
@@ -56,7 +55,7 @@ public class DetectionTunerDialog {
             JFrame owner,
             CellCounterApplicationService appService,
             TrackingConfiguration initialConfiguration,
-            Consumer<Mat> previewConsumer,
+            Consumer<TuningPreviewFrames> previewConsumer,
             Consumer<TrackingConfiguration> applyConsumer,
             Runnable closeConsumer) {
         this.owner = owner;
@@ -99,10 +98,6 @@ public class DetectionTunerDialog {
         detectShadowsCheck.setSelected(appliedConfig[0].isMog2DetectShadows());
         styleConfigCheckBox(detectShadowsCheck);
 
-        JCheckBox maskPreviewCheck = new JCheckBox("Preview mask view");
-        maskPreviewCheck.setSelected(true);
-        styleConfigCheckBox(maskPreviewCheck);
-
         JComboBox<TrackerAlgorithm> trackerAlgorithmCombo = new JComboBox<>(TrackerAlgorithm.values());
         trackerAlgorithmCombo.setSelectedItem(appliedConfig[0].getTrackerAlgorithm());
         trackerAlgorithmCombo.setFont(FONT_LABEL);
@@ -123,7 +118,7 @@ public class DetectionTunerDialog {
         JLabel maxVerticalDisplacementValue = createTuningValueChip(maxVerticalDisplacementSlider.getValue() + " px");
         JLabel minHorizontalMovementValue = createTuningValueChip(minHorizontalMovementSlider.getValue() + " px");
 
-        JLabel statusLabel = new JLabel("Adjust sliders and release to preview on the current frame.");
+        JLabel statusLabel = new JLabel("Adjust sliders and release to preview raw and foreground tracking on the current frame.");
         statusLabel.setFont(FONT_BODY);
         statusLabel.setForeground(TEXT_SECONDARY);
 
@@ -151,7 +146,6 @@ public class DetectionTunerDialog {
         addTuningRow(form, gbc, "Min Horizontal Movement", minHorizontalMovementSlider, minHorizontalMovementValue);
         addTuningComponentRow(form, gbc, "Tracker Algorithm", trackerAlgorithmCombo);
         addTuningCheckboxRow(form, gbc, detectShadowsCheck);
-        addTuningCheckboxRow(form, gbc, maskPreviewCheck);
 
         JScrollPane scrollPane = new JScrollPane(form);
         scrollPane.setBorder(new LineBorder(new java.awt.Color(82, 129, 193, 140), 1, true));
@@ -215,7 +209,6 @@ public class DetectionTunerDialog {
                 slider.setEnabled(enabled);
             }
             detectShadowsCheck.setEnabled(enabled);
-            maskPreviewCheck.setEnabled(enabled);
             trackerAlgorithmCombo.setEnabled(enabled);
             applyButton.setEnabled(enabled);
             resetButton.setEnabled(enabled);
@@ -278,37 +271,35 @@ public class DetectionTunerDialog {
                 (TrackerAlgorithm) trackerAlgorithmCombo.getSelectedItem()).normalized();
 
         class PreviewRunner {
-            private SwingWorker<Mat, Void> worker;
+            private SwingWorker<TuningPreviewFrames, Void> worker;
             private TrackingConfiguration queuedConfig;
-            private Boolean queuedMask;
 
-            void request(TrackingConfiguration cfg, boolean showMask) {
+            void request(TrackingConfiguration cfg) {
                 if (!dialog.isDisplayable()) {
                     return;
                 }
                 if (worker != null && !worker.isDone()) {
                     queuedConfig = cfg;
-                    queuedMask = showMask;
                     return;
                 }
-                start(cfg, showMask);
+                start(cfg);
             }
 
-            private void start(TrackingConfiguration cfg, boolean showMask) {
-                statusLabel.setText("Rendering preview on current frame...");
+            private void start(TrackingConfiguration cfg) {
+                statusLabel.setText("Rendering raw and foreground previews on the current frame...");
                 setTunerParameterInputsEnabled.accept(false);
                 worker = new SwingWorker<>() {
                     @Override
-                    protected Mat doInBackground() {
-                        return appService.previewCurrentFrameForTuning(cfg, showMask);
+                    protected TuningPreviewFrames doInBackground() {
+                        return appService.previewCurrentFramePairForTuning(cfg);
                     }
 
                     @Override
                     protected void done() {
                         try {
-                            Mat previewFrame = get();
-                            if (previewFrame != null && !previewFrame.empty()) {
-                                previewConsumer.accept(previewFrame);
+                            TuningPreviewFrames previewFrames = get();
+                            if (previewFrames != null) {
+                                previewConsumer.accept(previewFrames);
                                 statusLabel.setText("Preview updated.");
                             } else {
                                 statusLabel.setText("Preview unavailable for this frame.");
@@ -316,12 +307,10 @@ public class DetectionTunerDialog {
                         } catch (Exception ex) {
                             statusLabel.setText("Preview error: " + ex.getMessage());
                         } finally {
-                            if (queuedConfig != null && queuedMask != null) {
+                            if (queuedConfig != null) {
                                 TrackingConfiguration nextCfg = queuedConfig;
-                                boolean nextMask = queuedMask;
                                 queuedConfig = null;
-                                queuedMask = null;
-                                start(nextCfg, nextMask);
+                                start(nextCfg);
                             } else {
                                 setTunerParameterInputsEnabled.accept(true);
                             }
@@ -336,7 +325,6 @@ public class DetectionTunerDialog {
                     worker.cancel(true);
                 }
                 queuedConfig = null;
-                queuedMask = null;
                 setTunerParameterInputsEnabled.accept(true);
             }
         }
@@ -347,7 +335,7 @@ public class DetectionTunerDialog {
             if (suppressPreview[0]) {
                 return;
             }
-            previewRunner.request(buildWorkingConfig.get(), maskPreviewCheck.isSelected());
+            previewRunner.request(buildWorkingConfig.get());
         };
 
         for (JSlider slider : previewSliders) {
@@ -362,7 +350,6 @@ public class DetectionTunerDialog {
             });
         }
         detectShadowsCheck.addActionListener(e -> requestPreview.run());
-        maskPreviewCheck.addActionListener(e -> requestPreview.run());
 
         applyButton.addActionListener(e -> {
             TrackingConfiguration updated = buildWorkingConfig.get();

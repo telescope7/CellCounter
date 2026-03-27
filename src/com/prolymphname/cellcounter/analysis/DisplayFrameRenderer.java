@@ -18,7 +18,6 @@ public class DisplayFrameRenderer {
     private static final Scalar OCCLUSION_RISK_COLOR = new Scalar(72, 72, 255);
     private static final Scalar PREVIEW_COLOR = new Scalar(58, 233, 197);
     private static final Scalar LABEL_OUTLINE_COLOR = new Scalar(6, 10, 18);
-    private static final int TRAIL_POINT_LIMIT = 8;
     private static final double LABEL_FONT_SCALE = 0.375;
     private static final double MATCH_REGION_FILL_ALPHA = 0.18;
     private static final double MATCH_REGION_FILL_SCALE = 0.32;
@@ -141,13 +140,11 @@ public class DisplayFrameRenderer {
         if (trailPoints == null || trailPoints.size() < 2) {
             return;
         }
-        int startIndex = Math.max(0, trailPoints.size() - TRAIL_POINT_LIMIT);
-        List<Point> activeTrail = trailPoints.subList(startIndex, trailPoints.size());
-        for (int i = 1; i < activeTrail.size(); i++) {
-            double factor = 0.35 + (0.55 * i / Math.max(1.0, activeTrail.size() - 1.0));
+        for (int i = 1; i < trailPoints.size(); i++) {
+            double factor = 0.16 + (0.72 * i / Math.max(1.0, trailPoints.size() - 1.0));
             Scalar segmentColor = scaleColor(baseColor, factor);
-            Imgproc.line(displayOutput, activeTrail.get(i - 1), activeTrail.get(i), segmentColor, 1, Imgproc.LINE_AA, 0);
-            Imgproc.circle(displayOutput, activeTrail.get(i), 1, segmentColor, 1, Imgproc.LINE_AA, 0);
+            Imgproc.line(displayOutput, trailPoints.get(i - 1), trailPoints.get(i), segmentColor, 1, Imgproc.LINE_AA, 0);
+            Imgproc.circle(displayOutput, trailPoints.get(i), 1, segmentColor, 1, Imgproc.LINE_AA, 0);
         }
     }
 

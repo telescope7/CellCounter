@@ -33,15 +33,13 @@ public interface TrackingAdapter {
 
     Mat getLastProcessedFrame();
 
+    Mat getLastForegroundDisplayFrame();
+
     void setDisplayMOG2Foreground(boolean show);
 
-    void setDisplayTrackTrails(boolean show);
+    void setMirrorTrackingInRawEnabled(boolean show);
 
-    boolean isDisplayTrackTrailsEnabled();
-
-    void setDisplayMatchRegion(boolean show);
-
-    boolean isDisplayMatchRegionEnabled();
+    boolean isMirrorTrackingInRawEnabled();
 
     void setReferenceFrameForDiff(Mat frame);
 

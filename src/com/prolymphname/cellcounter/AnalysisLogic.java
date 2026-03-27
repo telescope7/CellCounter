@@ -32,15 +32,15 @@ public class AnalysisLogic {
 	private int frameNumber = 0;
 	private double fps = 30;
 	private Mat lastProcessedFrame;
+	private Mat lastForegroundDisplayFrame;
 	private BackgroundSubtractorMOG2 fgbg;
 	private CentroidTracker cellTracker;
 	private String videoFilename;
 	private Mat referenceFrame = null;
 	private boolean displayMOG2Foreground = false;
+	private boolean mirrorTrackingInRaw = false;
 	private Mat currentRawFrameForDisplay = null;
 	private Mat lastForegroundMaskForDisplay = null;
-	private boolean displayTrackTrails = true;
-	private boolean displayMatchRegion = true;
 	private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
 	private final ForegroundDetectionPipeline foregroundDetectionPipeline = new ForegroundDetectionPipeline();
 	private final DisplayFrameRenderer displayFrameRenderer = new DisplayFrameRenderer();
@@ -48,7 +48,6 @@ public class AnalysisLogic {
 
 	private List<Double> trackStartTimes = new ArrayList<>(); // Renamed from crossingTimes
 	private List<Double> speeds = new ArrayList<>();
-	private static final int MAX_TRAIL_POINTS = 8;
 
 	public static class HistoryItem {
 		public int frame;
@@ -331,6 +330,10 @@ public class AnalysisLogic {
 		this.trackStartTimes.clear();
 		this.speeds.clear();
 		this.displayMOG2Foreground = false; // Default view
+		if (this.lastForegroundDisplayFrame != null) {
+			this.lastForegroundDisplayFrame.release();
+			this.lastForegroundDisplayFrame = null;
+		}
 		if (this.lastForegroundMaskForDisplay != null) {
 			this.lastForegroundMaskForDisplay.release();
 			this.lastForegroundMaskForDisplay = null;
@@ -361,6 +364,10 @@ public class AnalysisLogic {
 			if (this.lastProcessedFrame != null)
 				this.lastProcessedFrame.release();
 			this.lastProcessedFrame = null;
+			if (this.lastForegroundDisplayFrame != null) {
+				this.lastForegroundDisplayFrame.release();
+				this.lastForegroundDisplayFrame = null;
+			}
 			if (this.currentRawFrameForDisplay != null) {
 				this.currentRawFrameForDisplay.release();
 				this.currentRawFrameForDisplay = null;
@@ -521,6 +528,10 @@ public class AnalysisLogic {
 			this.lastProcessedFrame.release();
 			this.lastProcessedFrame = null;
 		}
+		if (this.lastForegroundDisplayFrame != null) {
+			this.lastForegroundDisplayFrame.release();
+			this.lastForegroundDisplayFrame = null;
+		}
 		if (this.referenceFrame != null) {
 			this.referenceFrame.release();
 			this.referenceFrame = null;
@@ -572,9 +583,20 @@ public class AnalysisLogic {
 
 			recordObservedInstantSpeeds();
 
-			Mat displayImage = renderDisplayFromCurrentState(frameInput, this.displayMOG2Foreground, detection.mask());
+			Mat rawDisplayImage = renderDisplayFromCurrentState(
+					frameInput,
+					false,
+					detection.mask(),
+					mirrorTrackingInRaw,
+					mirrorTrackingInRaw,
+					mirrorTrackingInRaw);
+			Mat foregroundDisplayImage = renderDisplayFromCurrentState(frameInput, true, detection.mask(), true, true, true);
+			if (this.lastForegroundDisplayFrame != null) {
+				this.lastForegroundDisplayFrame.release();
+			}
+			this.lastForegroundDisplayFrame = foregroundDisplayImage;
 			markRenderedTracksAsExisting();
-			return displayImage;
+			return rawDisplayImage;
 		}
 	}
 
@@ -663,28 +685,16 @@ public class AnalysisLogic {
 		}
 	}
 
-	public boolean isDisplayTrackTrailsEnabled() {
-		return displayTrackTrails;
-	}
-
-	public void setDisplayTrackTrails(boolean show) {
-		boolean changed = (this.displayTrackTrails != show);
-		this.displayTrackTrails = show;
+	public void setMirrorTrackingInRawEnabled(boolean show) {
+		boolean changed = (this.mirrorTrackingInRaw != show);
+		this.mirrorTrackingInRaw = show;
 		if (changed) {
 			rerenderCurrentDisplayFrame();
 		}
 	}
 
-	public boolean isDisplayMatchRegionEnabled() {
-		return displayMatchRegion;
-	}
-
-	public void setDisplayMatchRegion(boolean show) {
-		boolean changed = (this.displayMatchRegion != show);
-		this.displayMatchRegion = show;
-		if (changed) {
-			rerenderCurrentDisplayFrame();
-		}
+	public boolean isMirrorTrackingInRawEnabled() {
+		return mirrorTrackingInRaw;
 	}
 
 	private void recordObservedInstantSpeeds() {
@@ -702,7 +712,13 @@ public class AnalysisLogic {
 		}
 	}
 
-	private Mat renderDisplayFromCurrentState(Mat sourceFrame, boolean showMaskView, Mat precomputedMask) {
+	private Mat renderDisplayFromCurrentState(
+			Mat sourceFrame,
+			boolean showMaskView,
+			Mat precomputedMask,
+			boolean showTrackingOverlay,
+			boolean showTrackTrails,
+			boolean showMatchRegion) {
 		Mat maskForDisplay = precomputedMask;
 		boolean releaseMaskForDisplay = false;
 		if (maskForDisplay == null || maskForDisplay.empty()) {
@@ -714,9 +730,9 @@ public class AnalysisLogic {
 						sourceFrame,
 						showMaskView,
 						maskForDisplay,
-						buildTrackedOverlays(),
-						displayTrackTrails,
-						displayMatchRegion,
+						showTrackingOverlay ? buildTrackedOverlays() : List.of(),
+						showTrackTrails,
+						showMatchRegion,
 						trackingConfiguration.getMinHorizontalMovementPixels(),
 						trackingConfiguration.getMaxVerticalDisplacementPixels(),
 						trackingConfiguration.getMaxAssociationDistancePixels());
@@ -775,9 +791,8 @@ public class AnalysisLogic {
 		if (track == null || track.history == null || track.history.isEmpty()) {
 			return List.of();
 		}
-		int startIndex = Math.max(0, track.history.size() - MAX_TRAIL_POINTS);
 		List<Point> points = new ArrayList<>();
-		for (int i = startIndex; i < track.history.size(); i++) {
+		for (int i = 0; i < track.history.size(); i++) {
 			HistoryItem item = track.history.get(i);
 			double centerX = (item.UL.x + item.LR.x) / 2.0;
 			double centerY = (item.UL.y + item.LR.y) / 2.0;
@@ -814,12 +829,28 @@ public class AnalysisLogic {
 				return;
 			}
 
-			Mat newDisplayFrame = renderDisplayFromCurrentState(rotatedFrame, this.displayMOG2Foreground,
-					this.lastForegroundMaskForDisplay);
+			Mat newRawDisplayFrame = renderDisplayFromCurrentState(
+					rotatedFrame,
+					false,
+					this.lastForegroundMaskForDisplay,
+					mirrorTrackingInRaw,
+					mirrorTrackingInRaw,
+					mirrorTrackingInRaw);
+			Mat newForegroundDisplayFrame = renderDisplayFromCurrentState(
+					rotatedFrame,
+					true,
+					this.lastForegroundMaskForDisplay,
+					true,
+					true,
+					true);
 			if (this.lastProcessedFrame != null) {
 				this.lastProcessedFrame.release();
 			}
-			this.lastProcessedFrame = newDisplayFrame;
+			if (this.lastForegroundDisplayFrame != null) {
+				this.lastForegroundDisplayFrame.release();
+			}
+			this.lastProcessedFrame = newRawDisplayFrame;
+			this.lastForegroundDisplayFrame = newForegroundDisplayFrame;
 		} finally {
 			rawCloneForRotation.release();
 			if (rotatedFrame != null && rotatedFrame != rawCloneForRotation && rotatedFrame != this.lastProcessedFrame) {
@@ -842,6 +873,10 @@ public class AnalysisLogic {
 	// Accessors
 	public Mat getLastProcessedFrame() {
 		return lastProcessedFrame;
+	}
+
+	public Mat getLastForegroundDisplayFrame() {
+		return lastForegroundDisplayFrame;
 	}
 
 	public List<Double> getSpeeds() {

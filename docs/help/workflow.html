@@ -18,17 +18,18 @@
 
     <section class="card">
       <h2>1. Open the Source Video</h2>
-      <p>Click <strong>Open Video</strong>, select a microscopy video, and verify the first frame renders in the Video panel. Status moves from <code>Idle</code> to <code>Loaded</code>.</p>
+      <p>Click <strong>Open Video</strong>, select a microscopy video, and verify the first frame renders in both the <strong>Raw Input + Tracks</strong> and <strong>Foreground + Tracks</strong> panes. Status moves from <code>Waiting for file</code> to <code>Ready</code>.</p>
       <div class="note">
-        Use the frame slider immediately after loading to move to a representative frame before tuning.
+        The frame slider is now a read-only progress indicator. Use <strong>Step</strong> or shortcut-based stepping to inspect specific frames. The foreground pane is also the place where full history tails and future match regions are shown.
       </div>
     </section>
 
     <section class="card">
       <h2>2. Configure/Tune Detection Parameters</h2>
-      <p>Use <strong>Tune Detection</strong> while paused. Adjust sliders and release to render a live preview of segmentation/tracking on the current frame.</p>
+      <p>Use <strong>Tune Detection</strong> while paused. Adjust sliders and release to render updated raw and foreground previews of segmentation/tracking on the current frame.</p>
       <ul>
-        <li>Enable <strong>Preview mask view</strong> to inspect foreground extraction quality.</li>
+        <li>Watch the raw pane as a clean reference image and the foreground pane for subtraction quality and tracking diagnostics.</li>
+        <li>Enable <strong>Mirror Tracking</strong> if you want the raw pane to show the same rich tails and future match regions as the foreground pane.</li>
         <li>Adjust sensitivity/noise controls first: MOG2 settings, threshold, contour area.</li>
         <li>Then adjust association rules: distance and movement/disappearance constraints.</li>
         <li>Click <strong>Apply Parameters</strong> to make values active for the session.</li>
@@ -43,6 +44,9 @@
         <li><strong>Fast Analyze</strong>: non-realtime batch pass for speed.</li>
       </ul>
       <p>Use <strong>Step</strong> for frame-by-frame checks, and <strong>Replay</strong> to restart from frame 1 with current settings.</p>
+      <div class="note">
+        Shortcuts: <code>P</code> / <code>K</code> for play-pause, <code>Esc</code> for pause, hold <code>Space</code> for repeated stepping, and <code>.</code> or <code>Right Arrow</code> for a single step.
+      </div>
     </section>
 
     <section class="card">

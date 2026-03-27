@@ -11,6 +11,7 @@ import com.prolymphname.cellcounter.ui.DetectionTunerDialog;
 import com.prolymphname.cellcounter.ui.GradientPanel;
 import com.prolymphname.cellcounter.ui.ReadOnlySlider;
 import com.prolymphname.cellcounter.ui.StartupSplashWindow;
+import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
@@ -32,7 +33,6 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.event.ItemEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -83,7 +83,6 @@ public class CellCounterGUI extends JFrame {
     private static final long serialVersionUID = 1L;
 
     private static final double DEFAULT_VIDEO_RATE = 1.0;
-    private static final int MASK_FLICKER_INTERVAL_MS = 920;
     private static final int STEP_HOLD_INITIAL_DELAY_MS = 260;
     private static final int STEP_HOLD_REPEAT_DELAY_MS = 90;
 
@@ -93,7 +92,8 @@ public class CellCounterGUI extends JFrame {
     private boolean videoPlaying = false;
     private boolean paused = false;
 
-    private JLabel videoLabel;
+    private JLabel rawVideoLabel;
+    private JLabel foregroundVideoLabel;
     private JLabel playbackRateValueLabel;
     private JPanel pipelineStateChip;
     private JLabel pipelineStateLabel;
@@ -110,27 +110,28 @@ public class CellCounterGUI extends JFrame {
     private JButton simulatorButton;
     private JButton tuneDetectionButton;
     private JLabel helpButton;
-    private JCheckBox mog2ViewCheckBox;
-    private JCheckBox showTrackTrailsCheckBox;
-    private JCheckBox showMatchRegionCheckBox;
+    private JCheckBox mirrorTrackingCheckBox;
     private JSlider playbackRateSlider;
     private JSlider videoPositionSlider;
     private JLabel videoPositionValueLabel;
     private boolean suppressVideoPositionEvents = false;
     private SwingWorker<Mat, Void> seekWorker;
-    private BufferedImage reusableVideoImage;
-    private ImageIcon reusableVideoIcon;
-    private int reusableVideoImageType = -1;
+    private final FrameDisplaySurface rawVideoSurface = new FrameDisplaySurface();
+    private final FrameDisplaySurface foregroundVideoSurface = new FrameDisplaySurface();
 
     private Timer videoTimer;
-    private Timer maskFlickerTimer;
     private Timer stepKeyRepeatTimer;
-    private boolean maskFlickerPhaseShowsMask = false;
-    private boolean maskFlickerSuspended = false;
     private boolean stepKeyHeld = false;
 
     private final Icon playIcon = new AppIcon(AppIcon.Kind.PLAY, Color.WHITE);
     private final Icon pauseIcon = new AppIcon(AppIcon.Kind.PAUSE, Color.WHITE);
+
+    private static final class FrameDisplaySurface {
+        private JLabel label;
+        private BufferedImage reusableImage;
+        private ImageIcon reusableIcon;
+        private int reusableImageType = -1;
+    }
 
     public static void showStartupSplash(int durationMillis, Runnable onComplete) {
         StartupSplashWindow splashWindow = new StartupSplashWindow(Math.max(150, durationMillis), onComplete);
@@ -167,7 +168,7 @@ public class CellCounterGUI extends JFrame {
         JSplitPane contentSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildVideoCard(), buildAnalyticsColumn());
         contentSplit.setOpaque(false);
         contentSplit.setBorder(null);
-        contentSplit.setResizeWeight(0.58);
+        contentSplit.setResizeWeight(0.72);
         contentSplit.setContinuousLayout(true);
         contentSplit.setDividerSize(9);
         body.add(contentSplit, BorderLayout.CENTER);
@@ -185,17 +186,12 @@ public class CellCounterGUI extends JFrame {
                 updateFrame(false);
             }
         });
-        maskFlickerTimer = new Timer(MASK_FLICKER_INTERVAL_MS, e -> advanceMaskFlickerPhase());
-        maskFlickerTimer.setInitialDelay(MASK_FLICKER_INTERVAL_MS);
         stepKeyRepeatTimer = new Timer(STEP_HOLD_REPEAT_DELAY_MS, e -> triggerStepButtonFromKeyboard());
         stepKeyRepeatTimer.setInitialDelay(STEP_HOLD_INITIAL_DELAY_MS);
 
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                if (maskFlickerTimer != null) {
-                    maskFlickerTimer.stop();
-                }
                 releaseStepKeyHold();
                 appService.releaseVideo();
             }
@@ -208,7 +204,7 @@ public class CellCounterGUI extends JFrame {
 
         pack();
         setLocationRelativeTo(null);
-        contentSplit.setDividerLocation(0.58);
+        contentSplit.setDividerLocation(0.72);
     }
 
     private JPanel buildHeader() {
@@ -327,23 +323,12 @@ public class CellCounterGUI extends JFrame {
         tuneDetectionButton = createSecondaryButton("Tune Detection", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
         tuneDetectionButton.setFont(FONT_LABEL);
         tuneDetectionButton.setToolTipText("Tune Detection (T)");
-        mog2ViewCheckBox = new JCheckBox("Mask View");
-        mog2ViewCheckBox.setSelected(false);
-        mog2ViewCheckBox.setToolTipText("Show mask flicker overlay (M).");
-        styleConfigCheckBox(mog2ViewCheckBox);
-        mog2ViewCheckBox.setFont(FONT_LABEL);
 
-        showTrackTrailsCheckBox = new JCheckBox("Show Trails");
-        showTrackTrailsCheckBox.setSelected(appService.isDisplayTrackTrailsEnabled());
-        showTrackTrailsCheckBox.setToolTipText("Display motion tails for tracked cells.");
-        styleConfigCheckBox(showTrackTrailsCheckBox);
-        showTrackTrailsCheckBox.setFont(FONT_LABEL);
-
-        showMatchRegionCheckBox = new JCheckBox("Show Future Match");
-        showMatchRegionCheckBox.setSelected(appService.isDisplayMatchRegionEnabled());
-        showMatchRegionCheckBox.setToolTipText("Display the future matching/search region for each tracked cell.");
-        styleConfigCheckBox(showMatchRegionCheckBox);
-        showMatchRegionCheckBox.setFont(FONT_LABEL);
+        mirrorTrackingCheckBox = new JCheckBox("Mirror Tracking");
+        mirrorTrackingCheckBox.setSelected(appService.isMirrorTrackingInRawEnabled());
+        mirrorTrackingCheckBox.setToolTipText("Mirror foreground tracking overlays into the raw video pane.");
+        styleConfigCheckBox(mirrorTrackingCheckBox);
+        mirrorTrackingCheckBox.setFont(FONT_LABEL);
 
         enforceButtonSize(analyzeButton, 136);
         enforceButtonSize(fastButton, 136);
@@ -367,9 +352,7 @@ public class CellCounterGUI extends JFrame {
         secondRow.add(playbackRateValueLabel);
         secondRow.add(playbackRateSlider);
         secondRow.add(tuneDetectionButton);
-        secondRow.add(mog2ViewCheckBox);
-        secondRow.add(showTrackTrailsCheckBox);
-        secondRow.add(showMatchRegionCheckBox);
+        secondRow.add(mirrorTrackingCheckBox);
 
         content.add(topRow);
         content.add(Box.createVerticalStrut(SPACE_XS));
@@ -381,20 +364,18 @@ public class CellCounterGUI extends JFrame {
     private JPanel buildVideoCard() {
         CardPanel videoCard = createCard("", "", false);
 
-        videoLabel = new JLabel("No video loaded. Click Open Video to begin.", SwingConstants.CENTER);
-        videoLabel.setFont(FONT_BODY);
-        videoLabel.setForeground(new Color(215, 230, 250));
-        videoLabel.setOpaque(true);
-        videoLabel.setBackground(new Color(7, 19, 40));
-        videoLabel.setPreferredSize(new Dimension(840, 560));
+        rawVideoLabel = createVideoDisplayLabel("No video loaded. Click Open Video to begin.");
+        rawVideoSurface.label = rawVideoLabel;
 
-        JPanel videoFrame = new JPanel(new BorderLayout());
-        videoFrame.setOpaque(true);
-        videoFrame.setBackground(new Color(7, 19, 40));
-        videoFrame.setBorder(new LineBorder(new Color(82, 129, 193, 140), 1, true));
-        videoFrame.add(videoLabel, BorderLayout.CENTER);
+        foregroundVideoLabel = createVideoDisplayLabel("Foreground view will appear after video load.");
+        foregroundVideoSurface.label = foregroundVideoLabel;
 
-        videoCard.add(videoFrame, BorderLayout.CENTER);
+        JPanel dualVideoPanel = new JPanel(new GridLayout(1, 2, SPACE_S, 0));
+        dualVideoPanel.setOpaque(false);
+        dualVideoPanel.add(createVideoPane("Raw Input + Tracks", rawVideoLabel));
+        dualVideoPanel.add(createVideoPane("Foreground + Tracks", foregroundVideoLabel));
+
+        videoCard.add(dualVideoPanel, BorderLayout.CENTER);
         return videoCard;
     }
 
@@ -407,15 +388,43 @@ public class CellCounterGUI extends JFrame {
 
         CardPanel trackCard = createCard("", "", false);
         trackCard.add(trackStartTimeChartPanel, BorderLayout.CENTER);
-        trackCard.setMinimumSize(new Dimension(360, 260));
+        trackCard.setMinimumSize(new Dimension(280, 200));
 
         CardPanel speedCard = createCard("", "", false);
         speedCard.add(speedDistributionChartPanel, BorderLayout.CENTER);
-        speedCard.setMinimumSize(new Dimension(360, 260));
+        speedCard.setMinimumSize(new Dimension(280, 200));
 
         rightColumn.add(trackCard);
         rightColumn.add(speedCard);
         return rightColumn;
+    }
+
+    private JLabel createVideoDisplayLabel(String emptyText) {
+        JLabel label = new JLabel(emptyText, SwingConstants.CENTER);
+        label.setFont(FONT_BODY);
+        label.setForeground(new Color(215, 230, 250));
+        label.setOpaque(true);
+        label.setBackground(new Color(7, 19, 40));
+        label.setPreferredSize(new Dimension(520, 500));
+        return label;
+    }
+
+    private JPanel createVideoPane(String title, JLabel label) {
+        JPanel wrapper = new JPanel(new BorderLayout(SPACE_XXS, SPACE_XXS));
+        wrapper.setOpaque(false);
+
+        JLabel heading = new JLabel(title);
+        heading.setFont(FONT_LABEL);
+        heading.setForeground(TEXT_SECONDARY);
+        wrapper.add(heading, BorderLayout.NORTH);
+
+        JPanel frame = new JPanel(new BorderLayout());
+        frame.setOpaque(true);
+        frame.setBackground(new Color(7, 19, 40));
+        frame.setBorder(new LineBorder(new Color(82, 129, 193, 140), 1, true));
+        frame.add(label, BorderLayout.CENTER);
+        wrapper.add(frame, BorderLayout.CENTER);
+        return wrapper;
     }
 
     private void bindActions() {
@@ -435,9 +444,7 @@ public class CellCounterGUI extends JFrame {
         resetButton.addActionListener(e -> handleResetVideo());
         fastButton.addActionListener(e -> handleFastAnalyze());
         saveResultsButton.addActionListener(e -> handleSaveResults());
-        mog2ViewCheckBox.addItemListener(this::handleMOG2Toggle);
-        showTrackTrailsCheckBox.addItemListener(e -> handleTrackTrailsToggle());
-        showMatchRegionCheckBox.addItemListener(e -> handleMatchRegionToggle());
+        mirrorTrackingCheckBox.addItemListener(e -> handleMirrorTrackingToggle());
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
         videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
     }
@@ -526,14 +533,6 @@ public class CellCounterGUI extends JFrame {
                 }
             }
         };
-        Action toggleMaskViewAction = new AbstractAction() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                if (shouldHandleGlobalShortcut() && mog2ViewCheckBox != null && mog2ViewCheckBox.isEnabled()) {
-                    mog2ViewCheckBox.setSelected(!mog2ViewCheckBox.isSelected());
-                }
-            }
-        };
         Action helpAction = new AbstractAction() {
             @Override
             public void actionPerformed(java.awt.event.ActionEvent e) {
@@ -574,8 +573,6 @@ public class CellCounterGUI extends JFrame {
                 "save-results", saveResultsAction);
         registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_T, 0, true),
                 "tune-detection", tuneDetectionAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_M, 0, true),
-                "toggle-mask-view", toggleMaskViewAction);
         registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_H, 0, true),
                 "open-help", helpAction);
     }
@@ -619,7 +616,6 @@ public class CellCounterGUI extends JFrame {
             setPlayButtonPlaying(false);
             setPipelineState("Paused", CHIP_WARNING);
         }
-        suspendMaskFlicker();
         openDetectionTunerDialog();
     }
 
@@ -680,19 +676,16 @@ public class CellCounterGUI extends JFrame {
                 this,
                 appService,
                 appService.getTrackingConfiguration(),
-                previewFrame -> {
-                    if (previewFrame != null && !previewFrame.empty()) {
-                        showFrame(previewFrame);
+                previewFrames -> {
+                    if (previewFrames == null) {
+                        return;
                     }
-                    if (previewFrame != null) {
-                        previewFrame.release();
+                    try (TuningPreviewFrames frames = previewFrames) {
+                        showPreviewFrames(frames.rawFrame(), frames.foregroundFrame());
                     }
                 },
                 updated -> {
                     appService.setTrackingConfiguration(updated);
-                    mog2ViewCheckBox.setSelected(false);
-                    stopMaskFlickerAndRestoreVideo();
-                    appService.setDisplayMOG2Foreground(false);
                     refreshCurrentVideoFrame();
                     refreshChartsNow();
                     paused = true;
@@ -701,10 +694,7 @@ public class CellCounterGUI extends JFrame {
                     setPlayButtonPlaying(false);
                     setPipelineState("Configured", CHIP_ACTIVE);
                 },
-                () -> {
-                    resumeMaskFlickerIfNeeded();
-                    refreshCurrentVideoFrame();
-                })
+                this::refreshCurrentVideoFrame)
                 .open();
     }
 
@@ -712,10 +702,7 @@ public class CellCounterGUI extends JFrame {
         if (!appService.isVideoSuccessfullyInitialized()) {
             return;
         }
-        Mat frame = appService.getLastProcessedFrame();
-        if (frame != null && !frame.empty()) {
-            showFrame(frame);
-        }
+        showAnalysisFrames(appService.getLastProcessedFrame(), appService.getLastForegroundDisplayFrame());
     }
 
     private void refreshVideoPositionControls() {
@@ -843,7 +830,7 @@ public class CellCounterGUI extends JFrame {
         chartPanel.setMouseWheelEnabled(true);
         chartPanel.setDomainZoomable(false);
         chartPanel.setRangeZoomable(false);
-        chartPanel.setPreferredSize(new Dimension(420, 210));
+        chartPanel.setPreferredSize(new Dimension(300, 150));
         return chartPanel;
     }
 
@@ -888,8 +875,6 @@ public class CellCounterGUI extends JFrame {
             videoPlaying = false;
             paused = true;
             setPlayButtonPlaying(false);
-            mog2ViewCheckBox.setSelected(false);
-            stopMaskFlickerAndRestoreVideo();
             playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
             updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
             syncChartRefreshIntervalWithVideo();
@@ -897,10 +882,9 @@ public class CellCounterGUI extends JFrame {
 
             Mat firstFrame = appService.getLastProcessedFrame();
             if (firstFrame != null && !firstFrame.empty()) {
-                showFrame(firstFrame);
+                showAnalysisFrames(firstFrame, appService.getLastForegroundDisplayFrame());
             } else {
-                videoLabel.setIcon(null);
-                videoLabel.setText("Unable to render first frame.");
+                clearVideoDisplays("Unable to render first frame.", "Foreground view unavailable.");
                 JOptionPane.showMessageDialog(this, "Video loaded, but the first frame could not be rendered.",
                         "Display Error", JOptionPane.WARNING_MESSAGE);
             }
@@ -916,8 +900,7 @@ public class CellCounterGUI extends JFrame {
         refreshVideoPositionControls();
 
         JOptionPane.showMessageDialog(this, "Error opening or initializing video file.", "Error", JOptionPane.ERROR_MESSAGE);
-        videoLabel.setIcon(null);
-        videoLabel.setText("No video loaded. Click Open Video to begin.");
+        clearVideoDisplays("No video loaded. Click Open Video to begin.", "Foreground view unavailable.");
     }
 
     private void handlePlayPauseToggle() {
@@ -985,8 +968,6 @@ public class CellCounterGUI extends JFrame {
         videoPlaying = false;
         paused = true;
         setPlayButtonPlaying(false);
-        mog2ViewCheckBox.setSelected(false);
-        stopMaskFlickerAndRestoreVideo();
         playbackRateSlider.setValue(rateToSlider(DEFAULT_VIDEO_RATE));
         updateVideoTimerDelay(DEFAULT_VIDEO_RATE);
 
@@ -994,10 +975,9 @@ public class CellCounterGUI extends JFrame {
         Mat firstFrameAfterReset = appService.getLastProcessedFrame();
 
         if (firstFrameAfterReset != null && !firstFrameAfterReset.empty()) {
-            showFrame(firstFrameAfterReset);
+            showAnalysisFrames(firstFrameAfterReset, appService.getLastForegroundDisplayFrame());
         } else {
-            videoLabel.setIcon(null);
-            videoLabel.setText("Unable to render frame after reset.");
+            clearVideoDisplays("Unable to render frame after reset.", "Foreground view unavailable.");
             JOptionPane.showMessageDialog(this, "Failed to prepare video for display after reset.", "Reset Error",
                     JOptionPane.ERROR_MESSAGE);
         }
@@ -1039,7 +1019,7 @@ public class CellCounterGUI extends JFrame {
     private void updateFrame(boolean forceChartRefresh) {
         Mat frame = appService.processNextFrameForGUI();
         if (frame != null && !frame.empty()) {
-            showFrame(frame);
+            showAnalysisFrames(frame, appService.getLastForegroundDisplayFrame());
             if (forceChartRefresh) {
                 refreshChartsNow();
             } else {
@@ -1077,29 +1057,6 @@ public class CellCounterGUI extends JFrame {
         }
     }
 
-    private void handleMOG2Toggle(ItemEvent e) {
-        if (!appService.isVideoSuccessfullyInitialized()) {
-            stopMaskFlickerAndRestoreVideo();
-            return;
-        }
-
-        if (e.getStateChange() == ItemEvent.SELECTED) {
-            startMaskFlicker();
-        } else {
-            stopMaskFlickerAndRestoreVideo();
-        }
-    }
-
-    private void handleTrackTrailsToggle() {
-        appService.setDisplayTrackTrails(showTrackTrailsCheckBox.isSelected());
-        refreshCurrentVideoFrame();
-    }
-
-    private void handleMatchRegionToggle() {
-        appService.setDisplayMatchRegion(showMatchRegionCheckBox.isSelected());
-        refreshCurrentVideoFrame();
-    }
-
     private void handleFastAnalyze() {
         if (!appService.isVideoSuccessfullyInitialized()) {
             JOptionPane.showMessageDialog(this, "Please load a video first using Open Video.", "No Video",
@@ -1118,7 +1075,6 @@ public class CellCounterGUI extends JFrame {
         setPlayButtonPlaying(false);
         setPipelineState("Fast Analyze", CHIP_WARNING);
 
-        suspendMaskFlicker();
         appService.resetAnalysisForCurrentVideo();
         syncChartRefreshIntervalWithVideo();
         int totalFrames = appService.getFrameCount();
@@ -1157,7 +1113,7 @@ public class CellCounterGUI extends JFrame {
                 if (!chunks.isEmpty()) {
                     Mat latestFrame = chunks.get(chunks.size() - 1);
                     if (latestFrame != null && !latestFrame.empty()) {
-                        showFrame(latestFrame);
+                        showAnalysisFrames(latestFrame, appService.getLastForegroundDisplayFrame());
                     }
                     latestFrame.release();
                     refreshChartsIfDue();
@@ -1168,11 +1124,10 @@ public class CellCounterGUI extends JFrame {
             protected void done() {
                 Mat finalFrame = appService.getLastProcessedFrame();
                 if (finalFrame != null && !finalFrame.empty()) {
-                    showFrame(finalFrame);
+                    showAnalysisFrames(finalFrame, appService.getLastForegroundDisplayFrame());
                 }
                 refreshChartsNow();
                 refreshVideoPositionControls();
-                resumeMaskFlickerIfNeeded();
                 setPipelineState("Ready", CHIP_ACTIVE);
                 JOptionPane.showMessageDialog(CellCounterGUI.this, "Fast Analysis Complete.", "Done",
                         JOptionPane.INFORMATION_MESSAGE);
@@ -1180,6 +1135,11 @@ public class CellCounterGUI extends JFrame {
             }
         };
         worker.execute();
+    }
+
+    private void handleMirrorTrackingToggle() {
+        appService.setMirrorTrackingInRawEnabled(mirrorTrackingCheckBox.isSelected());
+        refreshCurrentVideoFrame();
     }
 
     private void handleFrameForward() {
@@ -1219,7 +1179,6 @@ public class CellCounterGUI extends JFrame {
         setPlayButtonPlaying(false);
         setPipelineState("Seeking", CHIP_WARNING);
         setMainControlsEnabled(false);
-        suspendMaskFlicker();
 
         final int targetFrame = selected;
         seekWorker = new SwingWorker<>() {
@@ -1233,7 +1192,7 @@ public class CellCounterGUI extends JFrame {
                 try {
                     Mat seekFrame = get();
                     if (seekFrame != null && !seekFrame.empty()) {
-                        showFrame(seekFrame);
+                        showAnalysisFrames(seekFrame, appService.getLastForegroundDisplayFrame());
                         refreshChartsNow();
                         setPipelineState(appService.isCaptureActive() ? "Paused" : "Complete",
                                 appService.isCaptureActive() ? CHIP_WARNING : CHIP_ACTIVE);
@@ -1249,73 +1208,10 @@ public class CellCounterGUI extends JFrame {
                 } finally {
                     setMainControlsEnabled(true);
                     refreshVideoPositionControls();
-                    resumeMaskFlickerIfNeeded();
                 }
             }
         };
         seekWorker.execute();
-    }
-
-    private void startMaskFlicker() {
-        if (!appService.isVideoSuccessfullyInitialized() || maskFlickerSuspended) {
-            return;
-        }
-        maskFlickerPhaseShowsMask = true;
-        appService.setDisplayMOG2Foreground(true);
-        refreshCurrentVideoFrame();
-        if (maskFlickerTimer != null && !maskFlickerTimer.isRunning()) {
-            maskFlickerTimer.start();
-        }
-    }
-
-    private void stopMaskFlickerAndRestoreVideo() {
-        if (maskFlickerTimer != null) {
-            maskFlickerTimer.stop();
-        }
-        maskFlickerPhaseShowsMask = false;
-        if (!appService.isVideoSuccessfullyInitialized()) {
-            return;
-        }
-        appService.setDisplayMOG2Foreground(false);
-        refreshCurrentVideoFrame();
-    }
-
-    private void advanceMaskFlickerPhase() {
-        if (maskFlickerSuspended || mog2ViewCheckBox == null || !mog2ViewCheckBox.isSelected()
-                || !appService.isVideoSuccessfullyInitialized()) {
-            stopMaskFlickerAndRestoreVideo();
-            return;
-        }
-        maskFlickerPhaseShowsMask = !maskFlickerPhaseShowsMask;
-        appService.setDisplayMOG2Foreground(maskFlickerPhaseShowsMask);
-        refreshCurrentVideoFrame();
-    }
-
-    private void suspendMaskFlicker() {
-        maskFlickerSuspended = true;
-        if (maskFlickerTimer != null) {
-            maskFlickerTimer.stop();
-        }
-        if (appService.isVideoSuccessfullyInitialized()) {
-            appService.setDisplayMOG2Foreground(false);
-        }
-    }
-
-    private void resumeMaskFlickerIfNeeded() {
-        maskFlickerSuspended = false;
-        syncMaskViewAfterFrameReset();
-    }
-
-    private void syncMaskViewAfterFrameReset() {
-        if (!appService.isVideoSuccessfullyInitialized()) {
-            return;
-        }
-        if (mog2ViewCheckBox != null && mog2ViewCheckBox.isSelected()) {
-            startMaskFlicker();
-            return;
-        }
-        appService.setDisplayMOG2Foreground(false);
-        refreshCurrentVideoFrame();
     }
 
     private void handleSaveResults() {
@@ -1534,15 +1430,6 @@ public class CellCounterGUI extends JFrame {
         if (resetButton != null) {
             resetButton.setEnabled(enabled);
         }
-        if (mog2ViewCheckBox != null) {
-            mog2ViewCheckBox.setEnabled(enabled);
-        }
-        if (showTrackTrailsCheckBox != null) {
-            showTrackTrailsCheckBox.setEnabled(enabled);
-        }
-        if (showMatchRegionCheckBox != null) {
-            showMatchRegionCheckBox.setEnabled(enabled);
-        }
         if (saveResultsButton != null) {
             saveResultsButton.setEnabled(enabled);
         }
@@ -1554,6 +1441,9 @@ public class CellCounterGUI extends JFrame {
         }
         if (tuneDetectionButton != null) {
             tuneDetectionButton.setEnabled(enabled);
+        }
+        if (mirrorTrackingCheckBox != null) {
+            mirrorTrackingCheckBox.setEnabled(enabled);
         }
         if (playbackRateSlider != null) {
             playbackRateSlider.setEnabled(enabled);
@@ -1571,22 +1461,51 @@ public class CellCounterGUI extends JFrame {
         return playbackRateSlider.getValue() / 100.0;
     }
 
-    private void showFrame(Mat mat) {
-        BufferedImage image = matToBufferedImage(mat);
+    private void showPreviewFrames(Mat rawPreviewFrame, Mat foregroundPreviewFrame) {
+        if (appService.isMirrorTrackingInRawEnabled()) {
+            showFrame(rawVideoSurface, rawPreviewFrame);
+        }
+        showFrame(foregroundVideoSurface, foregroundPreviewFrame);
+    }
+
+    private void showAnalysisFrames(Mat rawFrame, Mat foregroundFrame) {
+        showFrame(rawVideoSurface, rawFrame);
+        showFrame(foregroundVideoSurface, foregroundFrame);
+    }
+
+    private void clearVideoDisplays(String rawText, String foregroundText) {
+        clearFrame(rawVideoSurface, rawText);
+        clearFrame(foregroundVideoSurface, foregroundText);
+    }
+
+    private void clearFrame(FrameDisplaySurface surface, String text) {
+        if (surface.label == null) {
+            return;
+        }
+        surface.label.setIcon(null);
+        surface.label.setText(text);
+        surface.label.repaint();
+    }
+
+    private void showFrame(FrameDisplaySurface surface, Mat mat) {
+        if (surface == null || surface.label == null || mat == null || mat.empty()) {
+            return;
+        }
+        BufferedImage image = matToBufferedImage(surface, mat);
         if (image == null) {
             return;
         }
-        if (reusableVideoIcon == null || reusableVideoIcon.getImage() != image) {
-            reusableVideoIcon = new ImageIcon(image);
+        if (surface.reusableIcon == null || surface.reusableIcon.getImage() != image) {
+            surface.reusableIcon = new ImageIcon(image);
         }
-        if (videoLabel.getIcon() != reusableVideoIcon) {
-            videoLabel.setIcon(reusableVideoIcon);
+        if (surface.label.getIcon() != surface.reusableIcon) {
+            surface.label.setIcon(surface.reusableIcon);
         }
-        videoLabel.setText(null);
-        videoLabel.repaint();
+        surface.label.setText(null);
+        surface.label.repaint();
     }
 
-    private BufferedImage matToBufferedImage(Mat mat) {
+    private BufferedImage matToBufferedImage(FrameDisplaySurface surface, Mat mat) {
         if (mat == null || mat.empty()) {
             return null;
         }
@@ -1595,17 +1514,17 @@ public class CellCounterGUI extends JFrame {
         int width = Math.max(1, mat.cols());
         int height = Math.max(1, mat.rows());
 
-        if (reusableVideoImage == null
-                || reusableVideoImage.getWidth() != width
-                || reusableVideoImage.getHeight() != height
-                || reusableVideoImageType != type) {
-            reusableVideoImage = new BufferedImage(width, height, type);
-            reusableVideoImageType = type;
+        if (surface.reusableImage == null
+                || surface.reusableImage.getWidth() != width
+                || surface.reusableImage.getHeight() != height
+                || surface.reusableImageType != type) {
+            surface.reusableImage = new BufferedImage(width, height, type);
+            surface.reusableImageType = type;
         }
 
-        byte[] data = ((DataBufferByte) reusableVideoImage.getRaster().getDataBuffer()).getData();
+        byte[] data = ((DataBufferByte) surface.reusableImage.getRaster().getDataBuffer()).getData();
         mat.get(0, 0, data);
-        return reusableVideoImage;
+        return surface.reusableImage;
     }
 
     public static void main(String[] args) {

@@ -5,6 +5,7 @@ import com.prolymphname.cellcounter.export.ExportMetadata;
 import com.prolymphname.cellcounter.trackingadapter.AnalysisLogicTrackingAdapter;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import com.prolymphname.cellcounter.trackingadapter.TrackingAdapter;
+import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.opencv.core.Mat;
 
 import java.io.File;
@@ -80,24 +81,20 @@ public class CellCounterApplicationService {
         return trackingAdapter.getLastProcessedFrame();
     }
 
+    public Mat getLastForegroundDisplayFrame() {
+        return trackingAdapter.getLastForegroundDisplayFrame();
+    }
+
     public void setDisplayMOG2Foreground(boolean show) {
         trackingAdapter.setDisplayMOG2Foreground(show);
     }
 
-    public void setDisplayTrackTrails(boolean show) {
-        trackingAdapter.setDisplayTrackTrails(show);
+    public void setMirrorTrackingInRawEnabled(boolean show) {
+        trackingAdapter.setMirrorTrackingInRawEnabled(show);
     }
 
-    public boolean isDisplayTrackTrailsEnabled() {
-        return trackingAdapter.isDisplayTrackTrailsEnabled();
-    }
-
-    public void setDisplayMatchRegion(boolean show) {
-        trackingAdapter.setDisplayMatchRegion(show);
-    }
-
-    public boolean isDisplayMatchRegionEnabled() {
-        return trackingAdapter.isDisplayMatchRegionEnabled();
+    public boolean isMirrorTrackingInRawEnabled() {
+        return trackingAdapter.isMirrorTrackingInRawEnabled();
     }
 
     public void setReferenceFrameForDiff(Mat frame) {
@@ -114,6 +111,23 @@ public class CellCounterApplicationService {
 
     public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
         return trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, showMaskView);
+    }
+
+    public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
+        Mat rawPreview = trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, false);
+        Mat foregroundPreview = null;
+        try {
+            foregroundPreview = trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, true);
+            return new TuningPreviewFrames(rawPreview, foregroundPreview);
+        } catch (RuntimeException ex) {
+            if (rawPreview != null) {
+                rawPreview.release();
+            }
+            if (foregroundPreview != null) {
+                foregroundPreview.release();
+            }
+            throw ex;
+        }
     }
 
     public void saveAnalysisCsv(File file, ExportMetadata metadata) throws IOException {

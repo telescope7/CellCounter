@@ -144,27 +144,22 @@ public class AnalysisExportServiceTest {
         }
 
         @Override
+        public Mat getLastForegroundDisplayFrame() {
+            throw unsupported();
+        }
+
+        @Override
         public void setDisplayMOG2Foreground(boolean show) {
             throw unsupported();
         }
 
         @Override
-        public void setDisplayTrackTrails(boolean show) {
+        public void setMirrorTrackingInRawEnabled(boolean show) {
             throw unsupported();
         }
 
         @Override
-        public boolean isDisplayTrackTrailsEnabled() {
-            throw unsupported();
-        }
-
-        @Override
-        public void setDisplayMatchRegion(boolean show) {
-            throw unsupported();
-        }
-
-        @Override
-        public boolean isDisplayMatchRegionEnabled() {
+        public boolean isMirrorTrackingInRawEnabled() {
             throw unsupported();
         }
 

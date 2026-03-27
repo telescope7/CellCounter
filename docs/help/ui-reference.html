@@ -29,7 +29,7 @@
           </tr>
           <tr>
             <td><strong>Status Chip</strong></td>
-            <td>Shows pipeline state. Common values: <code>Idle</code>, <code>Loaded</code>, <code>Playing</code>, <code>Paused</code>, <code>Seeking</code>, <code>Fast Analyze</code>, <code>Configured</code>, <code>Complete</code>, <code>Error</code>.</td>
+            <td>Shows pipeline state with a color-coded indicator dot. Common values: <code>Waiting for file</code>, <code>Ready</code>, <code>Playing</code>, <code>Paused</code>, <code>Seeking</code>, <code>Fast Analyze</code>, <code>Configured</code>, <code>Complete</code>, <code>Error</code>.</td>
           </tr>
         </tbody>
       </table>
@@ -42,12 +42,12 @@
           <tr><th>Button</th><th>Behavior</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Open Video</strong></td><td>Open a file chooser and initialize video + analysis pipeline.</td></tr>
-          <tr><td><strong>Fast Analyze</strong></td><td>Run accelerated full-pass analysis without realtime playback timing.</td></tr>
-          <tr><td><strong>Play/Analyze</strong></td><td>Toggle realtime play/pause while tracking each frame.</td></tr>
-          <tr><td><strong>Step</strong></td><td>Advance exactly one frame while paused.</td></tr>
-          <tr><td><strong>Replay</strong></td><td>Reset analysis and frame pointer to frame 1 using current settings.</td></tr>
-          <tr><td><strong>Save Results</strong></td><td>Save both analysis and footprint CSVs in one action.</td></tr>
+          <tr><td><strong>Open Video</strong></td><td>Open a file chooser and initialize video + analysis pipeline. Shortcut: <code>O</code>.</td></tr>
+          <tr><td><strong>Fast Analyze</strong></td><td>Run accelerated full-pass analysis without realtime playback timing. Shortcut: <code>F</code>.</td></tr>
+          <tr><td><strong>Play/Analyze</strong></td><td>Toggle realtime play/pause while tracking each frame. Shortcuts: <code>P</code> or <code>K</code>; <code>Esc</code> pauses only.</td></tr>
+          <tr><td><strong>Step</strong></td><td>Advance exactly one frame while paused. Shortcuts: hold <code>Space</code> for repeated stepping, or use <code>.</code> / <code>Right Arrow</code> for single-frame advance.</td></tr>
+          <tr><td><strong>Replay</strong></td><td>Reset analysis and frame pointer to frame 1 using current settings. Shortcut: <code>R</code>.</td></tr>
+          <tr><td><strong>Save Results</strong></td><td>Save both analysis and footprint CSVs in one action. Shortcut: <code>S</code>.</td></tr>
           <tr><td><strong>Simulator</strong></td><td>Open Cell Simulation Studio to generate synthetic videos and ground truth files.</td></tr>
         </tbody>
       </table>
@@ -66,7 +66,7 @@
           </tr>
           <tr>
             <td><strong>Video position slider</strong></td>
-            <td>Seek to a specific frame. During seek, controls are disabled until render completes.</td>
+            <td>Shows frame progress only. It is intentionally read-only and does not support scrubbing/dragging.</td>
           </tr>
           <tr>
             <td><strong>Playback Speed label</strong> (<code>Playback Speed: Nx</code>)</td>
@@ -78,12 +78,33 @@
           </tr>
           <tr>
             <td><strong>Tune Detection</strong></td>
-            <td>Open live detection tuning dialog for segmentation/tracking parameters.</td>
+            <td>Open live detection tuning dialog for segmentation/tracking parameters. Shortcut: <code>T</code>.</td>
           </tr>
           <tr>
-            <td><strong>Mask View</strong></td>
-            <td>Toggle MOG2 foreground mask display in the video pane.</td>
+            <td><strong>Mirror Tracking</strong></td>
+            <td>When enabled, the raw pane mirrors the richer foreground tracking overlays, including full history tails and future match regions.</td>
           </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Keyboard Shortcuts</h2>
+      <table>
+        <thead>
+          <tr><th>Shortcut</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>O</code></td><td>Open Video</td></tr>
+          <tr><td><code>F</code></td><td>Fast Analyze</td></tr>
+          <tr><td><code>P</code> or <code>K</code></td><td>Play / Pause toggle</td></tr>
+          <tr><td><code>Esc</code></td><td>Pause only</td></tr>
+          <tr><td>hold <code>Space</code></td><td>Repeated frame stepping while held</td></tr>
+          <tr><td><code>.</code> or <code>Right Arrow</code></td><td>Single-frame step</td></tr>
+          <tr><td><code>R</code></td><td>Replay / reset video</td></tr>
+          <tr><td><code>S</code></td><td>Save Results</td></tr>
+          <tr><td><code>T</code></td><td>Tune Detection</td></tr>
+          <tr><td><code>H</code></td><td>Open Help</td></tr>
         </tbody>
       </table>
     </section>
@@ -95,7 +116,8 @@
           <tr><th>Panel</th><th>What You See</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Video panel</strong></td><td>Current processed frame, overlays, and optional mask view.</td></tr>
+          <tr><td><strong>Raw Input + Tracks</strong></td><td>Current raw microscopy frame only. If <strong>Mirror Tracking</strong> is enabled, it mirrors the full foreground tracking overlays, including labels, boxes, history tails, and future match regions.</td></tr>
+          <tr><td><strong>Foreground + Tracks</strong></td><td>Current background-subtracted foreground frame with the same live tracking overlays plus full history trails and future match regions.</td></tr>
           <tr><td><strong>Track Start Distribution</strong></td><td>Histogram + cumulative distribution of track-start times.</td></tr>
           <tr><td><strong>Speed Distribution</strong></td><td>Histogram + cumulative distribution of observed speeds.</td></tr>
         </tbody>
@@ -109,9 +131,9 @@
           <tr><th>Dialog Control</th><th>Behavior</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Parameter sliders</strong></td><td>Adjust segmentation/tracking parameters and trigger preview when released.</td></tr>
+          <tr><td><strong>Parameter sliders</strong></td><td>Adjust segmentation/tracking parameters and trigger refreshed preview in both the raw and foreground panes when released.</td></tr>
           <tr><td><strong>Enable MOG2 shadows</strong></td><td>Toggle shadow classification in background subtraction.</td></tr>
-          <tr><td><strong>Preview mask view</strong></td><td>Preview tuning against mask output instead of composited frame.</td></tr>
+          <tr><td><strong>Tracker Algorithm</strong></td><td>Select the assignment method used to match detections to existing tracks during analysis.</td></tr>
           <tr><td><strong>Apply Parameters</strong></td><td>Apply current dialog values to active runtime configuration.</td></tr>
           <tr><td><strong>Reset Sliders</strong></td><td>Restore sliders to currently applied configuration.</td></tr>
           <tr><td><strong>Close</strong></td><td>Close dialog and return to main window.</td></tr>

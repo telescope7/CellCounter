@@ -87,28 +87,23 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
+    public Mat getLastForegroundDisplayFrame() {
+        return analysisLogic.getLastForegroundDisplayFrame();
+    }
+
+    @Override
     public void setDisplayMOG2Foreground(boolean show) {
         analysisLogic.setDisplayMOG2Foreground(show);
     }
 
     @Override
-    public void setDisplayTrackTrails(boolean show) {
-        analysisLogic.setDisplayTrackTrails(show);
+    public void setMirrorTrackingInRawEnabled(boolean show) {
+        analysisLogic.setMirrorTrackingInRawEnabled(show);
     }
 
     @Override
-    public boolean isDisplayTrackTrailsEnabled() {
-        return analysisLogic.isDisplayTrackTrailsEnabled();
-    }
-
-    @Override
-    public void setDisplayMatchRegion(boolean show) {
-        analysisLogic.setDisplayMatchRegion(show);
-    }
-
-    @Override
-    public boolean isDisplayMatchRegionEnabled() {
-        return analysisLogic.isDisplayMatchRegionEnabled();
+    public boolean isMirrorTrackingInRawEnabled() {
+        return analysisLogic.isMirrorTrackingInRawEnabled();
     }
 
     @Override
