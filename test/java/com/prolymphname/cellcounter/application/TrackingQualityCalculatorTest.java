@@ -48,7 +48,7 @@ public class TrackingQualityCalculatorTest {
                 30.0,
                 60);
 
-        assertEquals(65, summary.confidencePercent());
+        assertEquals(71, summary.confidencePercent());
         assertEquals(2, summary.activeTracks());
         assertEquals(1, summary.highConfidenceTracks());
         assertEquals(1, summary.watchTracks());

@@ -806,8 +806,9 @@ public class CellCounterGUI extends JFrame {
 
     private String buildConfidenceTooltip(TrackingQualitySummary summary) {
         return "<html>Composite confidence score for currently active tracks.<br>"
-                + "It rewards track maturity, enough left-to-right traversal across the frame,<br>"
-                + "and clean continuity, while penalizing active misses plus occlusion/collision risk.<br>"
+                + "It rewards horizontal span across the frame, track maturity, and clean continuity.<br>"
+                + "Longer-lived tracks with larger observed span carry more weight than short/new tracks,<br>"
+                + "while active misses plus occlusion/collision risk reduce the score.<br>"
                 + "High-confidence tracks: " + summary.highConfidenceTracks() + "</html>";
     }
 

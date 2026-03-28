@@ -4,6 +4,7 @@ import com.prolymphname.cellcounter.analysis.DetectionFrameResult;
 import com.prolymphname.cellcounter.analysis.DetectionCandidate;
 import com.prolymphname.cellcounter.analysis.DisplayFrameRenderer;
 import com.prolymphname.cellcounter.analysis.ForegroundDetectionPipeline;
+import com.prolymphname.cellcounter.analysis.RightEdgeExitPolicy;
 import com.prolymphname.cellcounter.analysis.TrackOverlayVisualPolicy;
 import com.prolymphname.cellcounter.analysis.TrackVisualState;
 import com.prolymphname.cellcounter.analysis.TrackedOverlay;
@@ -48,6 +49,7 @@ public class AnalysisLogic {
 	private final ForegroundDetectionPipeline foregroundDetectionPipeline = new ForegroundDetectionPipeline();
 	private final DisplayFrameRenderer displayFrameRenderer = new DisplayFrameRenderer();
 	private final TrackOverlayVisualPolicy trackOverlayVisualPolicy = new TrackOverlayVisualPolicy();
+	private final RightEdgeExitPolicy rightEdgeExitPolicy = new RightEdgeExitPolicy();
 
 	private List<Double> trackStartTimes = new ArrayList<>(); // Renamed from crossingTimes
 	private List<Double> speeds = new ArrayList<>();
@@ -89,20 +91,30 @@ public class AnalysisLogic {
 		private final double maxVerticalDisplacementPixels;
 		private final double minHorizontalMovementPixels;
 		private final double maxAssociationDistanceSq;
+		private final int rightEdgeExitZonePercent;
 		private final AssignmentStrategy assignmentStrategy;
 
 		public CentroidTracker(int maxDisappearedFrames,
 							   double maxVerticalDisplacementPixels,
 							   double minHorizontalMovementPixels,
 							   double maxAssociationDistancePixels,
+							   int rightEdgeExitZonePercent,
 							   AssignmentStrategy assignmentStrategy,
 							   AnalysisLogic outer) {
 			this.maxDisappeared = maxDisappearedFrames; // If not updated for 'maxDisappearedFrames', it's removed
 			this.maxVerticalDisplacementPixels = maxVerticalDisplacementPixels;
 			this.minHorizontalMovementPixels = minHorizontalMovementPixels;
 			this.maxAssociationDistanceSq = maxAssociationDistancePixels * maxAssociationDistancePixels;
+			this.rightEdgeExitZonePercent = rightEdgeExitZonePercent;
 			this.assignmentStrategy = assignmentStrategy;
 			this.outer = outer;
+		}
+
+		private boolean shouldRetireAsExited(Track track, int disappearedFrames, int frameWidth) {
+			return outer.rightEdgeExitPolicy.shouldRetire(track == null ? null : track.bbox,
+					disappearedFrames,
+					frameWidth,
+					rightEdgeExitZonePercent);
 		}
 
 		public void register(Point centroid, Rect bbox, double contourAreaPx, double currentTime, int frameNumber) {
@@ -139,16 +151,18 @@ public class AnalysisLogic {
 			disappeared.remove(objectID);
 		}
 
-		public void update(List<DetectionCandidate> detections, double currentTime, int frameNumber, double currentFps) {
+		public void update(List<DetectionCandidate> detections, double currentTime, int frameNumber, double currentFps, int frameWidth) {
 			// If no detections, increment disappeared count for all tracks
 			if (detections.isEmpty()) {
 				List<Integer> objectIDsList = new ArrayList<>(objects.keySet());
 				for (Integer objectID : objectIDsList) {
 					Track track = objects.get(objectID);
 					track.missed++;
-					disappeared.put(objectID, disappeared.get(objectID) + 1);
+					int disappearedFrames = disappeared.get(objectID) + 1;
+					disappeared.put(objectID, disappearedFrames);
 					track.instantSpeed = 0.0; // No movement if not seen
-					if (disappeared.get(objectID) >= maxDisappeared) { // Use >= as per discussion
+					if (shouldRetireAsExited(track, disappearedFrames, frameWidth)
+							|| disappearedFrames >= maxDisappeared) { // Use >= as per discussion
 						deregister(objectID);
 					}
 				}
@@ -243,9 +257,11 @@ public class AnalysisLogic {
 					int objectID = objectIDsList.get(i);
 					Track track = objects.get(objectID);
 					track.missed++;
-					disappeared.put(objectID, disappeared.get(objectID) + 1);
+					int disappearedFrames = disappeared.get(objectID) + 1;
+					disappeared.put(objectID, disappearedFrames);
 					track.instantSpeed = 0.0;
-					if (disappeared.get(objectID) >= maxDisappeared) {
+					if (shouldRetireAsExited(track, disappearedFrames, frameWidth)
+							|| disappearedFrames >= maxDisappeared) {
 						deregister(objectID);
 					}
 				}
@@ -281,6 +297,7 @@ public class AnalysisLogic {
 				cfg.getMaxVerticalDisplacementPixels(),
 				cfg.getMinHorizontalMovementPixels(),
 				cfg.getMaxAssociationDistancePixels(),
+				cfg.getRightEdgeExitZonePercent(),
 				strategy,
 				this);
 	}
@@ -591,7 +608,7 @@ public class AnalysisLogic {
 
 			double currentTime = (double) this.frameNumber / this.fps;
 			if (cellTracker != null) {
-				cellTracker.update(detection.detections(), currentTime, this.frameNumber, this.fps);
+				cellTracker.update(detection.detections(), currentTime, this.frameNumber, this.fps, frameInput.cols());
 			}
 
 			recordObservedInstantSpeeds();

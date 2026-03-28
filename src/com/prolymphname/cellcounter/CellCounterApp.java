@@ -163,6 +163,7 @@ public final class CellCounterApp {
                   --morphologyOpenIterations=<int>
                   --morphologyDilateIterations=<int>
                   --normalizedMaskThreshold=<double>
+                  --rightEdgeExitZonePercent=<int>
 
                 Notes:
                   - Tracking options can be provided in a properties file and/or CLI.
@@ -309,6 +310,7 @@ public final class CellCounterApp {
         private int morphologyDilateIterations;
         private double normalizedMaskThreshold;
         private int confidenceFieldWidthPercent;
+        private int rightEdgeExitZonePercent;
         private TrackerAlgorithm trackerAlgorithm;
 
         private TrackingConfigurationBuilder(TrackingConfiguration defaults) {
@@ -326,6 +328,7 @@ public final class CellCounterApp {
             this.morphologyDilateIterations = defaults.getMorphologyDilateIterations();
             this.normalizedMaskThreshold = defaults.getNormalizedMaskThreshold();
             this.confidenceFieldWidthPercent = defaults.getConfidenceFieldWidthPercent();
+            this.rightEdgeExitZonePercent = defaults.getRightEdgeExitZonePercent();
             this.trackerAlgorithm = defaults.getTrackerAlgorithm();
         }
 
@@ -356,6 +359,8 @@ public final class CellCounterApp {
                     case "normalizedmaskthreshold", "maskthreshold" -> normalizedMaskThreshold = Double.parseDouble(value);
                     case "confidencefieldwidthpercent", "confidencewidthpercent" ->
                             confidenceFieldWidthPercent = Integer.parseInt(value);
+                    case "rightedgeexitzonepercent", "edgeexitzonepercent", "exitzonepercent" ->
+                            rightEdgeExitZonePercent = Integer.parseInt(value);
                     case "trackeralgorithm" -> trackerAlgorithm = TrackerAlgorithm.fromString(value);
                     default -> throw new IllegalArgumentException("Unknown tracking option: " + rawKey);
                 }
@@ -380,6 +385,7 @@ public final class CellCounterApp {
                     morphologyDilateIterations,
                     normalizedMaskThreshold,
                     confidenceFieldWidthPercent,
+                    rightEdgeExitZonePercent,
                     trackerAlgorithm);
         }
 

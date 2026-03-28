@@ -71,6 +71,7 @@ public class InlineSettingsPanel extends CardPanel {
     private JSpinner maxVerticalDisplacementSpinner;
     private JSpinner minHorizontalMovementSpinner;
     private JSpinner confidenceFieldWidthPercentSpinner;
+    private JSpinner rightEdgeExitZonePercentSpinner;
     private JCheckBox detectShadowsCheckBox;
     private JComboBox<TrackerAlgorithm> trackerAlgorithmCombo;
     private JLabel statusLabel;
@@ -151,6 +152,7 @@ public class InlineSettingsPanel extends CardPanel {
         maxVerticalDisplacementSpinner = createIntegerSpinner(0, 500, 40, 1, NUMERIC_CONTROL_WIDTH);
         minHorizontalMovementSpinner = createIntegerSpinner(-100, 100, -3, 1, NUMERIC_CONTROL_WIDTH);
         confidenceFieldWidthPercentSpinner = createIntegerSpinner(1, 100, 60, 1, NUMERIC_CONTROL_WIDTH);
+        rightEdgeExitZonePercentSpinner = createIntegerSpinner(0, 50, 5, 1, NUMERIC_CONTROL_WIDTH);
 
         detectShadowsCheckBox = new JCheckBox("Enabled");
         detectShadowsCheckBox.setSelected(false);
@@ -201,6 +203,8 @@ public class InlineSettingsPanel extends CardPanel {
                         "Largest allowed centroid distance for matching a new detection to an existing track. Increase to reacquire bigger jumps; decrease to reduce mismatches."),
                 new RowSpec("Maximum Missed Frames", maxFramesDisappearedSpinner,
                         "How many frames a track can go unmatched before it is dropped. Increase for more persistence through occlusion or weak detection."),
+                new RowSpec("Right Edge Exit Zone (%)", rightEdgeExitZonePercentSpinner,
+                        "Percent of the frame width treated as the right-edge exit corridor. Tracks that disappear in this zone retire quickly instead of lingering as misses. Set to 0 to disable."),
                 new RowSpec("Maximum Vertical Displacement", maxVerticalDisplacementSpinner,
                         "Largest allowed up/down movement between matched detections. Increase if cells drift vertically or the camera is tilted."),
                 new RowSpec("Minimum Horizontal Movement", minHorizontalMovementSpinner,
@@ -439,6 +443,7 @@ public class InlineSettingsPanel extends CardPanel {
                 maxVerticalDisplacementSpinner,
                 minHorizontalMovementSpinner,
                 confidenceFieldWidthPercentSpinner,
+                rightEdgeExitZonePercentSpinner,
                 detectShadowsCheckBox,
                 trackerAlgorithmCombo,
                 applyButton,
@@ -468,6 +473,7 @@ public class InlineSettingsPanel extends CardPanel {
         maxVerticalDisplacementSpinner.setValue((int) Math.round(configuration.getMaxVerticalDisplacementPixels()));
         minHorizontalMovementSpinner.setValue((int) Math.round(configuration.getMinHorizontalMovementPixels()));
         confidenceFieldWidthPercentSpinner.setValue(configuration.getConfidenceFieldWidthPercent());
+        rightEdgeExitZonePercentSpinner.setValue(configuration.getRightEdgeExitZonePercent());
         detectShadowsCheckBox.setSelected(configuration.isMog2DetectShadows());
         trackerAlgorithmCombo.setSelectedItem(configuration.getTrackerAlgorithm());
         suppressPreview = false;
@@ -489,6 +495,7 @@ public class InlineSettingsPanel extends CardPanel {
                 ((Number) morphologyDilateSpinner.getValue()).intValue(),
                 ((Number) maskThresholdSpinner.getValue()).intValue(),
                 ((Number) confidenceFieldWidthPercentSpinner.getValue()).intValue(),
+                ((Number) rightEdgeExitZonePercentSpinner.getValue()).intValue(),
                 (TrackerAlgorithm) trackerAlgorithmCombo.getSelectedItem()).normalized();
     }
 

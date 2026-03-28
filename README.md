@@ -78,6 +78,7 @@ morphologyOpenIterations=1
 morphologyDilateIterations=1
 normalizedMaskThreshold=19
 confidenceFieldWidthPercent=60
+rightEdgeExitZonePercent=5
 trackerAlgorithm=GREEDY
 ```
 

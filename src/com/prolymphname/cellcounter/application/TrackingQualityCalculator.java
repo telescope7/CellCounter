@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.Map;
 
 public class TrackingQualityCalculator {
-    private static final double MISSED_FRAME_PENALTY = 0.12;
-    private static final double OCCLUSION_PENALTY = 0.22;
+    private static final double MISSED_FRAME_PENALTY = 0.08;
+    private static final double OCCLUSION_PENALTY = 0.18;
     private static final double HIGH_CONFIDENCE_THRESHOLD = 0.75;
+    private static final double TRACK_WEIGHT_BASE = 0.25;
+    private static final double TRACK_WEIGHT_SCALE = 0.75;
 
     public TrackingQualitySummary calculate(
             List<TrackedCell> trackedCells,
@@ -34,17 +36,21 @@ public class TrackingQualityCalculator {
         int highConfidenceTracks = 0;
         int watchTracks = 0;
         int occlusionRiskTracks = 0;
-        double totalConfidence = 0.0;
+        double weightedConfidenceSum = 0.0;
+        double totalWeight = 0.0;
 
         for (TrackStatusSnapshot status : currentTrackStatuses) {
             TrackedCell trackedCell = trackedCellById.get(status.cellId());
-            double confidence = calculateTrackConfidence(
+            double maturityScore = calculateMaturityScore(trackedCell, fps);
+            double widthTraversalScore = calculateWidthTraversalConfidenceScore(
                     trackedCell,
-                    status,
                     frameWidth,
-                    fps,
                     confidenceFieldWidthPercent);
-            totalConfidence += confidence;
+            double continuityScore = calculateContinuityScore(status);
+            double confidence = calculateTrackConfidence(maturityScore, widthTraversalScore, continuityScore);
+            double trackWeight = TRACK_WEIGHT_BASE + (TRACK_WEIGHT_SCALE * Math.max(maturityScore, widthTraversalScore));
+            weightedConfidenceSum += confidence * trackWeight;
+            totalWeight += trackWeight;
 
             if (status.occlusionRisk()) {
                 occlusionRiskTracks++;
@@ -52,12 +58,14 @@ public class TrackingQualityCalculator {
             if (status.watchState()) {
                 watchTracks++;
             }
-            if (!status.watchState() && confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+            if (!status.watchState()
+                    && confidence >= HIGH_CONFIDENCE_THRESHOLD
+                    && widthTraversalScore >= 0.5) {
                 highConfidenceTracks++;
             }
         }
 
-        int confidencePercent = clampPercent(Math.round((float) ((totalConfidence / activeTracks) * 100.0)));
+        int confidencePercent = clampPercent(Math.round((float) ((weightedConfidenceSum / Math.max(totalWeight, 0.0001)) * 100.0)));
         return new TrackingQualitySummary(
                 confidencePercent,
                 activeTracks,
@@ -67,23 +75,15 @@ public class TrackingQualityCalculator {
     }
 
     private double calculateTrackConfidence(
-            TrackedCell trackedCell,
-            TrackStatusSnapshot status,
-            int frameWidth,
-            double fps,
-            int confidenceFieldWidthPercent) {
-        double maturityScore = calculateMaturityScore(trackedCell, fps);
-        double widthTraversalScore = calculateWidthTraversalConfidenceScore(
-                trackedCell,
-                frameWidth,
-                confidenceFieldWidthPercent);
-        double continuityScore = calculateContinuityScore(status);
-        return clamp01((0.40 * maturityScore) + (0.35 * widthTraversalScore) + (0.25 * continuityScore));
+            double maturityScore,
+            double widthTraversalScore,
+            double continuityScore) {
+        return clamp01((0.20 * maturityScore) + (0.55 * widthTraversalScore) + (0.25 * continuityScore));
     }
 
     private double calculateMaturityScore(TrackedCell trackedCell, double fps) {
         int trackedFrames = trackedCell == null ? 0 : trackedCell.history().size();
-        double matureFrameThreshold = Math.max(12.0, fps > 0.0 ? fps * 0.75 : 18.0);
+        double matureFrameThreshold = Math.max(10.0, fps > 0.0 ? fps * 0.50 : 15.0);
         return clamp01(trackedFrames / matureFrameThreshold);
     }
 
@@ -107,10 +107,19 @@ public class TrackingQualityCalculator {
             return 0.0;
         }
         List<TrackedCellHistoryEntry> history = trackedCell.history();
-        double firstX = history.get(0).centroidX();
-        double lastX = history.get(history.size() - 1).centroidX();
-        double horizontalProgress = Math.max(0.0, lastX - firstX);
-        return clamp01(horizontalProgress / frameWidth);
+        double minX = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        for (TrackedCellHistoryEntry item : history) {
+            double x = item.centroidX();
+            if (x < minX) {
+                minX = x;
+            }
+            if (x > maxX) {
+                maxX = x;
+            }
+        }
+        double horizontalSpan = Math.max(0.0, maxX - minX);
+        return clamp01(horizontalSpan / frameWidth);
     }
 
     private double calculateContinuityScore(TrackStatusSnapshot status) {

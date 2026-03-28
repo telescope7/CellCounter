@@ -43,6 +43,8 @@ morphologyKernelSize=5
 morphologyOpenIterations=1
 morphologyDilateIterations=1
 normalizedMaskThreshold=19.0
+confidenceFieldWidthPercent=60
+rightEdgeExitZonePercent=5
 trackerAlgorithm=GREEDY
 startupSplashSeconds=1.5</code></pre>
       <p class="small">These are the repository defaults at the time of writing. The current file on disk is the actual source of truth.</p>
@@ -65,6 +67,12 @@ startupSplashSeconds=1.5</code></pre>
             <td>How many consecutive frames a track can go unmatched before it is retired.</td>
             <td>Tracks survive detector dropouts longer, but stale IDs can linger.</td>
             <td>Tracks terminate sooner, which reduces lingering IDs but can fragment real cells.</td>
+          </tr>
+          <tr>
+            <td><code>rightEdgeExitZonePercent</code></td>
+            <td>Width of the right-edge exit corridor as a percent of the frame. Tracks that disappear in this zone retire quickly instead of lingering as misses. Set to <code>0</code> to disable.</td>
+            <td>A larger exit corridor retires disappearing edge tracks sooner.</td>
+            <td>A smaller corridor keeps edge tracks alive longer, which can preserve borderline detections but also allows more lingering misses.</td>
           </tr>
           <tr>
             <td><code>minContourArea</code></td>
