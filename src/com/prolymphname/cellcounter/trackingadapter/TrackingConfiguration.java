@@ -48,21 +48,7 @@ public final class TrackingConfiguration {
     }
 
     public static TrackingConfiguration defaults() {
-        return new TrackingConfiguration(
-                10,
-                5.0,
-                90.0,
-                40.0,
-                -3.0,
-                175.0,
-                500,
-                50.0,
-                false,
-                3,
-                2,
-                2,
-                150.0,
-                TrackerAlgorithm.GREEDY);
+        return TrackingConfigurationDefaultsLoader.loadRequiredDefaults();
     }
 
     public TrackingConfiguration normalized() {

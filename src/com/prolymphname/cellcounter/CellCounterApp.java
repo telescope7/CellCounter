@@ -2,6 +2,7 @@ package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.trackingadapter.TrackingConfigurationDefaultsLoader;
 import com.prolymphname.cellcounter.trackingadapter.TrackerAlgorithm;
 
 import javax.swing.*;
@@ -16,8 +17,6 @@ import java.util.Map;
 import java.util.Properties;
 
 public final class CellCounterApp {
-    private static final Path STARTUP_TRACKING_CONFIG_PATH = Path.of("CellCounter.properties");
-    private static final double DEFAULT_STARTUP_SPLASH_SECONDS = 1.5;
     private static final String SPLASH_SECONDS_PROPERTY = "startupSplashSeconds";
     private static final String SPLASH_SECONDS_SYSTEM_PROPERTY = "cellcounter.startupSplashSeconds";
 
@@ -26,7 +25,15 @@ public final class CellCounterApp {
 
     public static void main(String[] args) {
         OpenCvSupport.loadOpenCv();
-        TrackingConfiguration startupDefaults = loadStartupTrackingConfiguration();
+        TrackingConfiguration startupDefaults;
+        int splashDurationMillis;
+        try {
+            startupDefaults = loadStartupTrackingConfiguration();
+            splashDurationMillis = resolveStartupSplashDurationMillis();
+        } catch (IllegalStateException ex) {
+            System.err.println("Failed to load application startup configuration: " + ex.getMessage());
+            return;
+        }
         if (args.length > 0) {
             runHeadless(args, startupDefaults);
             return;
@@ -37,7 +44,6 @@ public final class CellCounterApp {
             CellCounterApplicationService appService = new CellCounterApplicationService();
             appService.setTrackingConfiguration(startupDefaults);
             CellCounterGUI gui = new CellCounterGUI(appService);
-            int splashDurationMillis = resolveStartupSplashDurationMillis();
             CellCounterGUI.showStartupSplash(splashDurationMillis, () -> gui.setVisible(true));
         });
     }
@@ -62,47 +68,38 @@ public final class CellCounterApp {
     }
 
     private static TrackingConfiguration loadStartupTrackingConfiguration() {
-        TrackingConfigurationBuilder builder = new TrackingConfigurationBuilder(TrackingConfiguration.defaults());
-        if (!Files.exists(STARTUP_TRACKING_CONFIG_PATH)) {
-            System.err.println("Startup tracking config not found at "
-                    + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath()
-                    + "; using built-in defaults.");
-            return builder.build().normalized();
-        }
-
-        applyConfigFile(builder, STARTUP_TRACKING_CONFIG_PATH);
-        System.out.println("Loaded startup tracking defaults from " + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath());
-        return builder.build().normalized();
+        TrackingConfiguration startupDefaults = TrackingConfiguration.defaults();
+        System.out.println("Loaded startup tracking defaults from "
+                + TrackingConfigurationDefaultsLoader.getCachedDefaultsPath().toAbsolutePath());
+        return startupDefaults;
     }
 
     private static int resolveStartupSplashDurationMillis() {
-        double seconds = DEFAULT_STARTUP_SPLASH_SECONDS;
-
         String fromSystem = System.getProperty(SPLASH_SECONDS_SYSTEM_PROPERTY);
         if (fromSystem != null && !fromSystem.isBlank()) {
             try {
-                seconds = Double.parseDouble(fromSystem.trim());
+                return normalizeSplashSeconds(Double.parseDouble(fromSystem.trim()));
             } catch (NumberFormatException ex) {
-                System.err.println("Invalid " + SPLASH_SECONDS_SYSTEM_PROPERTY + " value '" + fromSystem
-                        + "'. Using default " + DEFAULT_STARTUP_SPLASH_SECONDS + "s.");
-            }
-        } else if (Files.exists(STARTUP_TRACKING_CONFIG_PATH)) {
-            Properties properties = new Properties();
-            try (Reader reader = Files.newBufferedReader(STARTUP_TRACKING_CONFIG_PATH)) {
-                properties.load(reader);
-                String configured = properties.getProperty(SPLASH_SECONDS_PROPERTY);
-                if (configured != null && !configured.isBlank()) {
-                    seconds = Double.parseDouble(configured.trim());
-                }
-            } catch (IOException | NumberFormatException ex) {
-                System.err.println("Invalid " + SPLASH_SECONDS_PROPERTY + " in "
-                        + STARTUP_TRACKING_CONFIG_PATH.toAbsolutePath()
-                        + ". Using default " + DEFAULT_STARTUP_SPLASH_SECONDS + "s.");
+                throw new IllegalStateException("Invalid " + SPLASH_SECONDS_SYSTEM_PROPERTY + " value '" + fromSystem + "'.", ex);
             }
         }
 
-        seconds = Math.max(0.1, seconds);
-        return (int) Math.round(seconds * 1000.0);
+        Properties properties = new Properties();
+        Path configPath = TrackingConfigurationDefaultsLoader.resolveRequiredDefaultConfigPath();
+        try (var reader = Files.newBufferedReader(configPath)) {
+            properties.load(reader);
+            String configured = properties.getProperty(SPLASH_SECONDS_PROPERTY);
+            if (configured == null || configured.isBlank()) {
+                throw new IllegalStateException("Missing " + SPLASH_SECONDS_PROPERTY + " in " + configPath.toAbsolutePath());
+            }
+            return normalizeSplashSeconds(Double.parseDouble(configured.trim()));
+        } catch (IOException | NumberFormatException ex) {
+            throw new IllegalStateException("Invalid " + SPLASH_SECONDS_PROPERTY + " in " + configPath.toAbsolutePath(), ex);
+        }
+    }
+
+    private static int normalizeSplashSeconds(double seconds) {
+        return (int) Math.round(Math.max(0.1, seconds) * 1000.0);
     }
 
     private static void applyConfigFile(TrackingConfigurationBuilder builder, Path filePath) {

@@ -8,34 +8,24 @@ public class TrackingConfigurationTest {
     // ------------------------------------------------------------------ defaults
 
     @Test
-    public void defaults_returnsGreedyAlgorithm() {
-        assertEquals(TrackerAlgorithm.GREEDY, TrackingConfiguration.defaults().getTrackerAlgorithm());
-    }
+    public void defaults_matchCellCounterProperties() {
+        TrackingConfigurationDefaultsLoader.clearCacheForTests();
+        TrackingConfiguration defaults = TrackingConfiguration.defaults();
 
-    @Test
-    public void defaults_hasPositiveMaxFramesDisappeared() {
-        assertTrue(TrackingConfiguration.defaults().getMaxFramesDisappeared() > 0);
-    }
-
-    @Test
-    public void defaults_hasPositiveMog2HistoryFrames() {
-        assertTrue(TrackingConfiguration.defaults().getMog2HistoryFrames() > 0);
-    }
-
-    @Test
-    public void defaults_maxVerticalDisplacementIsReasonable() {
-        // Should be ≤ a typical video height (~1080) — no longer the old 43035 sentinel
-        double v = TrackingConfiguration.defaults().getMaxVerticalDisplacementPixels();
-        assertTrue("maxVerticalDisplacementPixels should be > 0 and <= 1080, was: " + v,
-                v > 0 && v <= 1080);
-    }
-
-    @Test
-    public void defaults_mog2HistoryFramesIsReasonable() {
-        // Should be ≤ 600 — no longer the old 1108 value
-        int h = TrackingConfiguration.defaults().getMog2HistoryFrames();
-        assertTrue("mog2HistoryFrames should be > 0 and <= 600, was: " + h,
-                h > 0 && h <= 600);
+        assertEquals(7, defaults.getMaxFramesDisappeared());
+        assertEquals(15.0, defaults.getMinContourArea(), 0.0001);
+        assertEquals(219.0, defaults.getMaxRectCircumference(), 0.0001);
+        assertEquals(10.0, defaults.getMaxVerticalDisplacementPixels(), 0.0001);
+        assertEquals(-2.0, defaults.getMinHorizontalMovementPixels(), 0.0001);
+        assertEquals(109.0, defaults.getMaxAssociationDistancePixels(), 0.0001);
+        assertEquals(200, defaults.getMog2HistoryFrames());
+        assertEquals(17.0, defaults.getMog2VarThreshold(), 0.0001);
+        assertFalse(defaults.isMog2DetectShadows());
+        assertEquals(5, defaults.getMorphologyKernelSize());
+        assertEquals(1, defaults.getMorphologyOpenIterations());
+        assertEquals(1, defaults.getMorphologyDilateIterations());
+        assertEquals(19.0, defaults.getNormalizedMaskThreshold(), 0.0001);
+        assertEquals(TrackerAlgorithm.GREEDY, defaults.getTrackerAlgorithm());
     }
 
     // ------------------------------------------------------------------ normalized

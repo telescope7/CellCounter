@@ -24,25 +24,28 @@
         <li><strong>Headless override</strong>: CLI flags and <code>--tracking-config=&lt;file&gt;</code> can override startup defaults.</li>
       </ul>
       <div class="note">
-        If <code>CellCounter.properties</code> is missing, built-in defaults from code are used.
+        <code>CellCounter.properties</code> is now the required default source for startup tracking values.
       </div>
     </section>
 
     <section class="card">
-      <h2>Built-In Factory Defaults</h2>
-      <pre><code>maxFramesDisappeared=10
-minContourArea=5.0
-maxRectCircumference=90.0
-maxVerticalDisplacementPixels=40.0
-minHorizontalMovementPixels=-3.0
-maxAssociationDistancePixels=175.0
-mog2HistoryFrames=500
-mog2VarThreshold=50.0
+      <h2>Project Default Properties</h2>
+      <p>The application default tracking values come from <code>CellCounter.properties</code>. Those values are loaded as the shared default configuration for GUI startup and for any code path that requests the default tracking configuration.</p>
+      <pre><code>maxFramesDisappeared=7
+minContourArea=15.0
+maxRectCircumference=219.0
+maxVerticalDisplacementPixels=10.0
+minHorizontalMovementPixels=-2.0
+maxAssociationDistancePixels=109.0
+mog2HistoryFrames=200
+mog2VarThreshold=17.0
 mog2DetectShadows=false
-morphologyKernelSize=3
-morphologyOpenIterations=2
-morphologyDilateIterations=2
-normalizedMaskThreshold=150.0</code></pre>
+morphologyKernelSize=5
+morphologyOpenIterations=1
+morphologyDilateIterations=1
+normalizedMaskThreshold=19.0
+trackerAlgorithm=GREEDY
+startupSplashSeconds=1.5</code></pre>
     </section>
 
     <section class="card">
