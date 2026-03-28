@@ -70,6 +70,7 @@ public class InlineSettingsPanel extends CardPanel {
     private JSpinner maxFramesDisappearedSpinner;
     private JSpinner maxVerticalDisplacementSpinner;
     private JSpinner minHorizontalMovementSpinner;
+    private JSpinner confidenceFieldWidthPercentSpinner;
     private JCheckBox detectShadowsCheckBox;
     private JComboBox<TrackerAlgorithm> trackerAlgorithmCombo;
     private JLabel statusLabel;
@@ -149,6 +150,7 @@ public class InlineSettingsPanel extends CardPanel {
         maxFramesDisappearedSpinner = createIntegerSpinner(1, 1000, 10, 1, NUMERIC_CONTROL_WIDTH);
         maxVerticalDisplacementSpinner = createIntegerSpinner(0, 500, 40, 1, NUMERIC_CONTROL_WIDTH);
         minHorizontalMovementSpinner = createIntegerSpinner(-100, 100, -3, 1, NUMERIC_CONTROL_WIDTH);
+        confidenceFieldWidthPercentSpinner = createIntegerSpinner(1, 100, 60, 1, NUMERIC_CONTROL_WIDTH);
 
         detectShadowsCheckBox = new JCheckBox("Enabled");
         detectShadowsCheckBox.setSelected(false);
@@ -203,6 +205,8 @@ public class InlineSettingsPanel extends CardPanel {
                         "Largest allowed up/down movement between matched detections. Increase if cells drift vertically or the camera is tilted."),
                 new RowSpec("Minimum Horizontal Movement", minHorizontalMovementSpinner,
                         "Minimum allowed left-to-right movement. Negative values tolerate a little backward jitter; larger positive values enforce stronger forward motion."),
+                new RowSpec("Confidence Width Target (%)", confidenceFieldWidthPercentSpinner,
+                        "How much of the frame width a track should traverse to earn full width-based confidence credit. Lower values make confidence rise sooner; higher values require longer traversal."),
                 new RowSpec("Tracker Algorithm", trackerAlgorithmCombo,
                         "Assignment method used when matching detections to existing tracks. Greedy is faster and simpler; Hungarian optimizes the full assignment set."))), groupGbc);
 
@@ -434,6 +438,7 @@ public class InlineSettingsPanel extends CardPanel {
                 maxFramesDisappearedSpinner,
                 maxVerticalDisplacementSpinner,
                 minHorizontalMovementSpinner,
+                confidenceFieldWidthPercentSpinner,
                 detectShadowsCheckBox,
                 trackerAlgorithmCombo,
                 applyButton,
@@ -462,6 +467,7 @@ public class InlineSettingsPanel extends CardPanel {
         maxFramesDisappearedSpinner.setValue(configuration.getMaxFramesDisappeared());
         maxVerticalDisplacementSpinner.setValue((int) Math.round(configuration.getMaxVerticalDisplacementPixels()));
         minHorizontalMovementSpinner.setValue((int) Math.round(configuration.getMinHorizontalMovementPixels()));
+        confidenceFieldWidthPercentSpinner.setValue(configuration.getConfidenceFieldWidthPercent());
         detectShadowsCheckBox.setSelected(configuration.isMog2DetectShadows());
         trackerAlgorithmCombo.setSelectedItem(configuration.getTrackerAlgorithm());
         suppressPreview = false;
@@ -482,6 +488,7 @@ public class InlineSettingsPanel extends CardPanel {
                 ((Number) morphologyOpenSpinner.getValue()).intValue(),
                 ((Number) morphologyDilateSpinner.getValue()).intValue(),
                 ((Number) maskThresholdSpinner.getValue()).intValue(),
+                ((Number) confidenceFieldWidthPercentSpinner.getValue()).intValue(),
                 (TrackerAlgorithm) trackerAlgorithmCombo.getSelectedItem()).normalized();
     }
 

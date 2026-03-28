@@ -308,6 +308,7 @@ public final class CellCounterApp {
         private int morphologyOpenIterations;
         private int morphologyDilateIterations;
         private double normalizedMaskThreshold;
+        private int confidenceFieldWidthPercent;
         private TrackerAlgorithm trackerAlgorithm;
 
         private TrackingConfigurationBuilder(TrackingConfiguration defaults) {
@@ -324,6 +325,7 @@ public final class CellCounterApp {
             this.morphologyOpenIterations = defaults.getMorphologyOpenIterations();
             this.morphologyDilateIterations = defaults.getMorphologyDilateIterations();
             this.normalizedMaskThreshold = defaults.getNormalizedMaskThreshold();
+            this.confidenceFieldWidthPercent = defaults.getConfidenceFieldWidthPercent();
             this.trackerAlgorithm = defaults.getTrackerAlgorithm();
         }
 
@@ -352,6 +354,8 @@ public final class CellCounterApp {
                     case "morphologyopeniterations" -> morphologyOpenIterations = Integer.parseInt(value);
                     case "morphologydilateiterations" -> morphologyDilateIterations = Integer.parseInt(value);
                     case "normalizedmaskthreshold", "maskthreshold" -> normalizedMaskThreshold = Double.parseDouble(value);
+                    case "confidencefieldwidthpercent", "confidencewidthpercent" ->
+                            confidenceFieldWidthPercent = Integer.parseInt(value);
                     case "trackeralgorithm" -> trackerAlgorithm = TrackerAlgorithm.fromString(value);
                     default -> throw new IllegalArgumentException("Unknown tracking option: " + rawKey);
                 }
@@ -375,6 +379,7 @@ public final class CellCounterApp {
                     morphologyOpenIterations,
                     morphologyDilateIterations,
                     normalizedMaskThreshold,
+                    confidenceFieldWidthPercent,
                     trackerAlgorithm);
         }
 

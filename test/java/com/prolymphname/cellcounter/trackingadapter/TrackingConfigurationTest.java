@@ -25,6 +25,7 @@ public class TrackingConfigurationTest {
         assertEquals(1, defaults.getMorphologyOpenIterations());
         assertEquals(1, defaults.getMorphologyDilateIterations());
         assertEquals(19.0, defaults.getNormalizedMaskThreshold(), 0.0001);
+        assertEquals(60, defaults.getConfidenceFieldWidthPercent());
         assertEquals(TrackerAlgorithm.GREEDY, defaults.getTrackerAlgorithm());
     }
 
@@ -52,6 +53,7 @@ public class TrackingConfigurationTest {
                 base.getMog2VarThreshold(), base.isMog2DetectShadows(),
                 base.getMorphologyKernelSize(), base.getMorphologyOpenIterations(),
                 base.getMorphologyDilateIterations(), base.getNormalizedMaskThreshold(),
+                base.getConfidenceFieldWidthPercent(),
                 TrackerAlgorithm.GREEDY);
         assertEquals(1, cfg.normalized().getMaxFramesDisappeared());
     }
@@ -66,6 +68,7 @@ public class TrackingConfigurationTest {
                 base.getMog2HistoryFrames(), base.getMog2VarThreshold(), base.isMog2DetectShadows(),
                 base.getMorphologyKernelSize(), base.getMorphologyOpenIterations(),
                 base.getMorphologyDilateIterations(), 999.0,
+                base.getConfidenceFieldWidthPercent(),
                 TrackerAlgorithm.GREEDY);
         assertEquals(255.0, cfg.normalized().getNormalizedMaskThreshold(), 0.001);
     }
@@ -80,6 +83,7 @@ public class TrackingConfigurationTest {
                 base.getMog2HistoryFrames(), base.getMog2VarThreshold(), base.isMog2DetectShadows(),
                 base.getMorphologyKernelSize(), base.getMorphologyOpenIterations(),
                 base.getMorphologyDilateIterations(), base.getNormalizedMaskThreshold(),
+                base.getConfidenceFieldWidthPercent(),
                 TrackerAlgorithm.HUNGARIAN);
         assertEquals(TrackerAlgorithm.HUNGARIAN, cfg.normalized().getTrackerAlgorithm());
     }
@@ -94,6 +98,7 @@ public class TrackingConfigurationTest {
                 base.getMog2HistoryFrames(), base.getMog2VarThreshold(), base.isMog2DetectShadows(),
                 base.getMorphologyKernelSize(), base.getMorphologyOpenIterations(),
                 base.getMorphologyDilateIterations(), base.getNormalizedMaskThreshold(),
+                base.getConfidenceFieldWidthPercent(),
                 null);
         assertEquals(TrackerAlgorithm.GREEDY, cfg.getTrackerAlgorithm());
         assertEquals(TrackerAlgorithm.GREEDY, cfg.normalized().getTrackerAlgorithm());
@@ -126,6 +131,6 @@ public class TrackingConfigurationTest {
                 b.getMog2VarThreshold(), b.isMog2DetectShadows(),
                 kernelSize,
                 b.getMorphologyOpenIterations(), b.getMorphologyDilateIterations(),
-                b.getNormalizedMaskThreshold(), TrackerAlgorithm.GREEDY);
+                b.getNormalizedMaskThreshold(), b.getConfidenceFieldWidthPercent(), TrackerAlgorithm.GREEDY);
     }
 }

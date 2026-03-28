@@ -126,4 +126,9 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     public List<TrackedCell> getTrackedCells() {
         return analysisLogic.getTrackedCellsSnapshot();
     }
+
+    @Override
+    public List<TrackStatusSnapshot> getCurrentTrackStatuses() {
+        return analysisLogic.getCurrentTrackStatusesSnapshot();
+    }
 }

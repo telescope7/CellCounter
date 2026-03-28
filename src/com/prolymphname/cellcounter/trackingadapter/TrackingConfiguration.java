@@ -14,6 +14,7 @@ public final class TrackingConfiguration {
     private final int morphologyOpenIterations;
     private final int morphologyDilateIterations;
     private final double normalizedMaskThreshold;
+    private final int confidenceFieldWidthPercent;
     private final TrackerAlgorithm trackerAlgorithm;
 
     public TrackingConfiguration(
@@ -30,6 +31,7 @@ public final class TrackingConfiguration {
             int morphologyOpenIterations,
             int morphologyDilateIterations,
             double normalizedMaskThreshold,
+            int confidenceFieldWidthPercent,
             TrackerAlgorithm trackerAlgorithm) {
         this.maxFramesDisappeared = maxFramesDisappeared;
         this.minContourArea = minContourArea;
@@ -44,6 +46,7 @@ public final class TrackingConfiguration {
         this.morphologyOpenIterations = morphologyOpenIterations;
         this.morphologyDilateIterations = morphologyDilateIterations;
         this.normalizedMaskThreshold = normalizedMaskThreshold;
+        this.confidenceFieldWidthPercent = confidenceFieldWidthPercent;
         this.trackerAlgorithm = (trackerAlgorithm != null) ? trackerAlgorithm : TrackerAlgorithm.GREEDY;
     }
 
@@ -71,6 +74,7 @@ public final class TrackingConfiguration {
                 Math.max(0, morphologyOpenIterations),
                 Math.max(0, morphologyDilateIterations),
                 Math.max(0.0, Math.min(255.0, normalizedMaskThreshold)),
+                Math.max(1, Math.min(100, confidenceFieldWidthPercent)),
                 (trackerAlgorithm != null) ? trackerAlgorithm : TrackerAlgorithm.GREEDY);
     }
 
@@ -124,6 +128,10 @@ public final class TrackingConfiguration {
 
     public double getNormalizedMaskThreshold() {
         return normalizedMaskThreshold;
+    }
+
+    public int getConfidenceFieldWidthPercent() {
+        return confidenceFieldWidthPercent;
     }
 
     public TrackerAlgorithm getTrackerAlgorithm() {

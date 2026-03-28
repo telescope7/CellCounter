@@ -11,6 +11,7 @@ import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import com.prolymphname.cellcounter.trackingadapter.AssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.GreedyAssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.HungarianAssignmentStrategy;
+import com.prolymphname.cellcounter.trackingadapter.TrackStatusSnapshot;
 import com.prolymphname.cellcounter.trackingadapter.TrackedCell;
 import com.prolymphname.cellcounter.trackingadapter.TrackedCellHistoryEntry;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
@@ -42,6 +43,7 @@ public class AnalysisLogic {
 	private boolean mirrorTrackingInRaw = false;
 	private Mat currentRawFrameForDisplay = null;
 	private Mat lastForegroundMaskForDisplay = null;
+	private List<TrackedOverlay> lastTrackedOverlays = List.of();
 	private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
 	private final ForegroundDetectionPipeline foregroundDetectionPipeline = new ForegroundDetectionPipeline();
 	private final DisplayFrameRenderer displayFrameRenderer = new DisplayFrameRenderer();
@@ -558,6 +560,7 @@ public class AnalysisLogic {
 			this.lastForegroundMaskForDisplay.release();
 			this.lastForegroundMaskForDisplay = null;
 		}
+		this.lastTrackedOverlays = List.of();
 
 		System.out.println("Video resources released.");
 	}
@@ -751,6 +754,7 @@ public class AnalysisLogic {
 	private List<TrackedOverlay> buildTrackedOverlays() {
 		List<TrackedOverlay> overlays = new ArrayList<>();
 		if (cellTracker == null || cellTracker.objects == null) {
+			this.lastTrackedOverlays = List.of();
 			return overlays;
 		}
 		List<Map.Entry<Integer, Track>> activeEntries = new ArrayList<>(cellTracker.objects.entrySet());
@@ -769,6 +773,7 @@ public class AnalysisLogic {
 					occlusionRisk[i],
 					buildTrailPoints(track)));
 		}
+		this.lastTrackedOverlays = List.copyOf(overlays);
 		return overlays;
 	}
 
@@ -916,6 +921,20 @@ public class AnalysisLogic {
 			snapshot.add(toTrackedCell(entry.getKey(), entry.getValue()));
 		}
 		return snapshot;
+	}
+
+	public List<TrackStatusSnapshot> getCurrentTrackStatusesSnapshot() {
+		if (lastTrackedOverlays == null || lastTrackedOverlays.isEmpty()) {
+			return List.of();
+		}
+		List<TrackStatusSnapshot> snapshots = new ArrayList<>(lastTrackedOverlays.size());
+		for (TrackedOverlay overlay : lastTrackedOverlays) {
+			snapshots.add(new TrackStatusSnapshot(
+					overlay.cellId(),
+					overlay.missedFrames(),
+					overlay.occlusionRisk()));
+		}
+		return snapshots;
 	}
 
 	private TrackedCell toTrackedCell(int cellId, Track track) {

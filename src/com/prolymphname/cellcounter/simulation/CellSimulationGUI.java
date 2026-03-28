@@ -98,7 +98,7 @@ public class CellSimulationGUI extends JFrame {
         title.setFont(FONT_H1);
         title.setForeground(TEXT_PRIMARY);
 
-        JLabel subtitle = new JLabel("Generate synthetic rolling-cell videos and ground-truth CSVs for tracking validation");
+        JLabel subtitle = new JLabel("Generate synthetic rolling-cell videos and companion CSV outputs for workflow validation");
         subtitle.setFont(FONT_BODY);
         subtitle.setForeground(TEXT_SECONDARY);
 

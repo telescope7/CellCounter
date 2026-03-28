@@ -1,6 +1,7 @@
 package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.application.CellCounterApplicationService;
+import com.prolymphname.cellcounter.application.TrackingQualitySummary;
 import com.prolymphname.cellcounter.export.ExportMetadata;
 import com.prolymphname.cellcounter.simulation.CellSimulationGUI;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
@@ -9,6 +10,7 @@ import com.prolymphname.cellcounter.ui.CardPanel;
 import com.prolymphname.cellcounter.ui.ChartRefreshController;
 import com.prolymphname.cellcounter.ui.GradientPanel;
 import com.prolymphname.cellcounter.ui.InlineSettingsPanel;
+import com.prolymphname.cellcounter.ui.RoundedBorder;
 import com.prolymphname.cellcounter.ui.StartupSplashWindow;
 import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.jfree.chart.ChartPanel;
@@ -85,6 +87,7 @@ public class CellCounterGUI extends JFrame {
     private static final double DEFAULT_VIDEO_RATE = 1.0;
     private static final int STEP_HOLD_INITIAL_DELAY_MS = 260;
     private static final int STEP_HOLD_REPEAT_DELAY_MS = 90;
+    private static final Color CHIP_CRITICAL = new Color(184, 79, 90);
 
     private final CellCounterApplicationService appService;
     private final ChartRefreshController chartRefreshController = new ChartRefreshController();
@@ -111,6 +114,10 @@ public class CellCounterGUI extends JFrame {
     private JButton tuneDetectionButton;
     private JLabel helpButton;
     private JCheckBox mirrorTrackingCheckBox;
+    private JPanel trackingQualityPanel;
+    private JLabel trackingConfidenceLabel;
+    private JLabel trackingActiveLabel;
+    private JLabel trackingWatchLabel;
     private InlineSettingsPanel settingsPanel;
     private JSlider playbackRateSlider;
     private JLabel videoPositionValueLabel;
@@ -327,6 +334,7 @@ public class CellCounterGUI extends JFrame {
         secondRow.add(playbackRateSlider);
         secondRow.add(tuneDetectionButton);
         secondRow.add(mirrorTrackingCheckBox);
+        secondRow.add(buildTrackingQualityPanel());
 
         settingsPanel = new InlineSettingsPanel(
                 appService,
@@ -358,6 +366,31 @@ public class CellCounterGUI extends JFrame {
         content.add(settingsPanel);
         controlsCard.add(content, BorderLayout.CENTER);
         return controlsCard;
+    }
+
+    private JPanel buildTrackingQualityPanel() {
+        trackingQualityPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, SPACE_XXS, 0));
+        trackingQualityPanel.setOpaque(false);
+        trackingQualityPanel.setBorder(new RoundedBorder(new Color(82, 129, 193, 120), 16));
+
+        JLabel title = new JLabel("Tracking Quality");
+        title.setFont(FONT_LABEL);
+        title.setForeground(TEXT_SECONDARY);
+
+        trackingConfidenceLabel = createChipLabel("Confidence 0", CHIP_IDLE);
+        trackingActiveLabel = createChipLabel("Active 0", CHIP_IDLE);
+        trackingWatchLabel = createChipLabel("Watch 0", CHIP_IDLE);
+
+        trackingConfidenceLabel.setFont(FONT_LABEL);
+        trackingActiveLabel.setFont(FONT_LABEL);
+        trackingWatchLabel.setFont(FONT_LABEL);
+
+        trackingQualityPanel.add(title);
+        trackingQualityPanel.add(trackingConfidenceLabel);
+        trackingQualityPanel.add(trackingActiveLabel);
+        trackingQualityPanel.add(trackingWatchLabel);
+        trackingQualityPanel.setToolTipText(buildTrackingQualityPanelTooltip(TrackingQualitySummary.empty()));
+        return trackingQualityPanel;
     }
 
     private JPanel buildVideoCard() {
@@ -626,6 +659,7 @@ public class CellCounterGUI extends JFrame {
         playbackRateValueLabel.setText(formatPlaybackSpeedText(DEFAULT_VIDEO_RATE));
         chartRefreshController.configureForFps(appService.getFps());
         refreshVideoPositionControls();
+        refreshTrackingQualitySummary();
     }
 
     private void handleTuneDetection() {
@@ -730,6 +764,60 @@ public class CellCounterGUI extends JFrame {
 
     private String formatPlaybackSpeedText(double rate) {
         return String.format("Playback Speed: %.1fx", rate);
+    }
+
+    private void refreshTrackingQualitySummary() {
+        updateTrackingQualityPanel(appService.getTrackingQualitySummary());
+    }
+
+    private void updateTrackingQualityPanel(TrackingQualitySummary summary) {
+        if (trackingConfidenceLabel == null || summary == null) {
+            return;
+        }
+
+        trackingConfidenceLabel.setText("Confidence " + summary.confidencePercent());
+        trackingConfidenceLabel.setBackground(resolveConfidenceChipColor(summary.confidencePercent()));
+        trackingConfidenceLabel.setToolTipText(buildConfidenceTooltip(summary));
+
+        trackingActiveLabel.setText("Active " + summary.activeTracks());
+        trackingActiveLabel.setBackground(summary.activeTracks() > 0 ? CHIP_ACTIVE : CHIP_IDLE);
+        trackingActiveLabel.setToolTipText("<html>Tracks currently being maintained on the live frame.<br>"
+                + "This count comes from the same overlay state used for the foreground diagnostics pane.</html>");
+
+        trackingWatchLabel.setText("Watch " + summary.watchTracks());
+        trackingWatchLabel.setBackground(summary.watchTracks() > 0 ? CHIP_WARNING : CHIP_IDLE);
+        trackingWatchLabel.setToolTipText("<html>Tracks that need attention right now because they are missed or flagged<br>"
+                + "with current occlusion / collision risk.</html>");
+
+        if (trackingQualityPanel != null) {
+            trackingQualityPanel.setToolTipText(buildTrackingQualityPanelTooltip(summary));
+        }
+    }
+
+    private Color resolveConfidenceChipColor(int confidencePercent) {
+        if (confidencePercent >= 75) {
+            return CHIP_PLAYING;
+        }
+        if (confidencePercent >= 50) {
+            return CHIP_WARNING;
+        }
+        return CHIP_CRITICAL;
+    }
+
+    private String buildConfidenceTooltip(TrackingQualitySummary summary) {
+        return "<html>Composite confidence score for currently active tracks.<br>"
+                + "It rewards track maturity, enough left-to-right traversal across the frame,<br>"
+                + "and clean continuity, while penalizing active misses plus occlusion/collision risk.<br>"
+                + "High-confidence tracks: " + summary.highConfidenceTracks() + "</html>";
+    }
+
+    private String buildTrackingQualityPanelTooltip(TrackingQualitySummary summary) {
+        return "<html>High-level tracking quality summary for the current frame.<br>"
+                + "Confidence: " + summary.confidencePercent() + " / 100<br>"
+                + "Active tracks: " + summary.activeTracks() + "<br>"
+                + "High-confidence tracks: " + summary.highConfidenceTracks() + "<br>"
+                + "Watch tracks: " + summary.watchTracks() + "<br>"
+                + "Occlusion risk tracks: " + summary.occlusionRiskTracks() + "</html>";
     }
 
     private int clampInt(int value, int min, int max) {
@@ -1427,11 +1515,13 @@ public class CellCounterGUI extends JFrame {
     private void showAnalysisFrames(Mat rawFrame, Mat foregroundFrame) {
         showFrame(rawVideoSurface, rawFrame);
         showFrame(foregroundVideoSurface, foregroundFrame);
+        refreshTrackingQualitySummary();
     }
 
     private void clearVideoDisplays(String rawText, String foregroundText) {
         clearFrame(rawVideoSurface, rawText);
         clearFrame(foregroundVideoSurface, foregroundText);
+        updateTrackingQualityPanel(TrackingQualitySummary.empty());
     }
 
     private void clearFrame(FrameDisplaySurface surface, String text) {

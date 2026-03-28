@@ -2,6 +2,7 @@ package com.prolymphname.cellcounter.export;
 
 import com.prolymphname.cellcounter.trackingadapter.TrackedCell;
 import com.prolymphname.cellcounter.trackingadapter.TrackedCellHistoryEntry;
+import com.prolymphname.cellcounter.trackingadapter.TrackStatusSnapshot;
 import com.prolymphname.cellcounter.trackingadapter.TrackingAdapter;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
@@ -182,6 +183,11 @@ public class AnalysisExportServiceTest {
         @Override
         public List<TrackedCell> getTrackedCells() {
             return trackedCells;
+        }
+
+        @Override
+        public List<TrackStatusSnapshot> getCurrentTrackStatuses() {
+            return List.of();
         }
 
         private UnsupportedOperationException unsupported() {

@@ -46,6 +46,7 @@ public final class TrackingConfigurationDefaultsLoader {
                     parseRequiredInt(properties, resolvedPath, "morphologyOpenIterations"),
                     parseRequiredInt(properties, resolvedPath, "morphologyDilateIterations"),
                     parseRequiredDouble(properties, resolvedPath, "normalizedMaskThreshold"),
+                    parseRequiredInt(properties, resolvedPath, "confidenceFieldWidthPercent"),
                     parseRequiredTrackerAlgorithm(properties, resolvedPath, "trackerAlgorithm"))
                     .normalized();
             cachedDefaultsPath = resolvedPath;

@@ -49,4 +49,6 @@ public interface TrackingAdapter {
     TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration);
 
     List<TrackedCell> getTrackedCells();
+
+    List<TrackStatusSnapshot> getCurrentTrackStatuses();
 }

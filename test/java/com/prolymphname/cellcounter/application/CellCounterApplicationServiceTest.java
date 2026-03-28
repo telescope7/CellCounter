@@ -1,6 +1,7 @@
 package com.prolymphname.cellcounter.application;
 
 import com.prolymphname.cellcounter.export.AnalysisExportService;
+import com.prolymphname.cellcounter.trackingadapter.TrackStatusSnapshot;
 import com.prolymphname.cellcounter.trackingadapter.TrackedCell;
 import com.prolymphname.cellcounter.trackingadapter.TrackingAdapter;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
@@ -172,6 +173,11 @@ public class CellCounterApplicationServiceTest {
 
         @Override
         public List<TrackedCell> getTrackedCells() {
+            return List.of();
+        }
+
+        @Override
+        public List<TrackStatusSnapshot> getCurrentTrackStatuses() {
             return List.of();
         }
     }

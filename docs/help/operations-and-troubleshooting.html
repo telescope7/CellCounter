@@ -10,7 +10,7 @@
   <main class="shell">
     <section class="hero">
       <h1>Operations and Troubleshooting</h1>
-      <p>Practical guidance for output interpretation, tuning order, testing, evaluation, and distribution.</p>
+      <p>Practical guidance for output interpretation, tuning order, testing, and distribution.</p>
       <div class="chip-row">
         <a class="inline" href="index.html">Back to Help Home</a>
       </div>
@@ -28,10 +28,6 @@
           <tr>
             <td><code>&lt;base&gt;_footprint.csv</code></td>
             <td>Detailed frame-by-frame footprint records for validation, debugging, and external analytics.</td>
-          </tr>
-          <tr>
-            <td><code>simcell_*.csv</code></td>
-            <td>Simulator-generated truth data used by the evaluator and validation workflows.</td>
           </tr>
         </tbody>
       </table>
@@ -79,23 +75,8 @@
             <td>MOG2 or morphology is absorbing slow/stationary objects</td>
             <td>Review <code>mog2HistoryFrames</code>, <code>mog2VarThreshold</code>, contour area, and morphology settings.</td>
           </tr>
-          <tr>
-            <td>Evaluator composite score differs between runs</td>
-            <td>Reference config, inputs, or frame subset changed</td>
-            <td>Use the same truth files, reference config, and processing scope when comparing composite scores.</td>
-          </tr>
         </tbody>
       </table>
-    </section>
-
-    <section class="card">
-      <h2>Ground-Truth Evaluation Workflow</h2>
-      <pre><code>./run-ground-truth-eval.sh \
-  --video=/path/simcell.avi \
-  --truth-events=/path/simcell_events.csv \
-  --tracking-config=/path/CellCounter.properties \
-  --output-prefix=/tmp/eval_run</code></pre>
-      <p>The evaluator computes comparison metrics such as score, F1, and timing/velocity quality terms against truth files.</p>
     </section>
 
     <section class="card">

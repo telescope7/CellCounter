@@ -215,13 +215,13 @@ public class CellSimulationGenerator {
             Path trajectoryCsv,
             int totalFrames) throws IOException {
         String json = "{\n"
-                + "  \"schema\": \"cellcounter.simulation.groundtruth.v1\",\n"
+                + "  \"schema\": \"cellcounter.simulation.reference.v1\",\n"
                 + "  \"generated_at_utc\": \"" + escapeJson(Instant.now().toString()) + "\",\n"
                 + "  \"video_path\": \"" + escapeJson(videoPath.toAbsolutePath().toString()) + "\",\n"
                 + "  \"legacy_csv_path\": \"" + escapeJson(legacyCsv.toAbsolutePath().toString()) + "\",\n"
                 + "  \"events_csv_path\": \"" + escapeJson(eventsCsv.toAbsolutePath().toString()) + "\",\n"
                 + "  \"trajectory_csv_path\": \"" + escapeJson(trajectoryCsv.toAbsolutePath().toString()) + "\",\n"
-                + "  \"purpose\": \"Ground-truth generation for future automated comparison against CellCounter tracking outputs.\",\n"
+                + "  \"purpose\": \"Synthetic reference data generation for validation against CellCounter tracking outputs.\",\n"
                 + "  \"parameters\": {\n"
                 + "    \"width\": " + params.width() + ",\n"
                 + "    \"height\": " + params.height() + ",\n"

@@ -15,14 +15,23 @@ import java.util.List;
 public class CellCounterApplicationService {
     private final TrackingAdapter trackingAdapter;
     private final AnalysisExportService exportService;
+    private final TrackingQualityCalculator trackingQualityCalculator;
 
     public CellCounterApplicationService() {
-        this(new AnalysisLogicTrackingAdapter(), new AnalysisExportService());
+        this(new AnalysisLogicTrackingAdapter(), new AnalysisExportService(), new TrackingQualityCalculator());
     }
 
     public CellCounterApplicationService(TrackingAdapter trackingAdapter, AnalysisExportService exportService) {
+        this(trackingAdapter, exportService, new TrackingQualityCalculator());
+    }
+
+    CellCounterApplicationService(
+            TrackingAdapter trackingAdapter,
+            AnalysisExportService exportService,
+            TrackingQualityCalculator trackingQualityCalculator) {
         this.trackingAdapter = trackingAdapter;
         this.exportService = exportService;
+        this.trackingQualityCalculator = trackingQualityCalculator;
     }
 
     public boolean initializeVideo(String videoPath) {
@@ -107,6 +116,20 @@ public class CellCounterApplicationService {
 
     public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
         return trackingAdapter.previewCurrentFramePairForTuning(trackingConfiguration);
+    }
+
+    public TrackingQualitySummary getTrackingQualitySummary() {
+        int frameWidth = 0;
+        Mat currentFrame = trackingAdapter.getLastProcessedFrame();
+        if (currentFrame != null && !currentFrame.empty()) {
+            frameWidth = currentFrame.cols();
+        }
+        return trackingQualityCalculator.calculate(
+                trackingAdapter.getTrackedCells(),
+                trackingAdapter.getCurrentTrackStatuses(),
+                frameWidth,
+                trackingAdapter.getFps(),
+                trackingAdapter.getTrackingConfiguration().getConfidenceFieldWidthPercent());
     }
 
     public void saveAnalysisCsv(File file, ExportMetadata metadata) throws IOException {

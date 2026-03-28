@@ -4,8 +4,7 @@ CellCounter is a Java desktop application for rolling-cell analysis in biomateri
 
 - an interactive Swing GUI with dual video panes
 - a shared headless analysis path for batch processing
-- a simulator for generating synthetic rolling-cell videos and ground-truth CSVs
-- CLI tools for ground-truth evaluation against simulator truth data
+- a simulator for generating synthetic rolling-cell videos and companion CSV outputs
 - packaging support for desktop distribution, including macOS DMG, signing, and notarization
 
 ## Core Capabilities
@@ -29,13 +28,6 @@ Important behavior:
 - before a video is loaded, values can still be changed and applied for the session
 - preview rendering becomes available automatically once a video is loaded
 - startup defaults come from `CellCounter.properties`
-
-### Ground-truth workflows
-
-The project includes:
-
-- a simulator for synthetic test video generation
-- a CLI evaluator for comparing tracking output against truth data
 
 ## Requirements
 
@@ -85,6 +77,7 @@ morphologyKernelSize=5
 morphologyOpenIterations=1
 morphologyDilateIterations=1
 normalizedMaskThreshold=19
+confidenceFieldWidthPercent=60
 trackerAlgorithm=GREEDY
 ```
 
@@ -156,28 +149,6 @@ mvn -Dmaven.repo.local=.m2/repository -DskipTests exec:java \
 - metadata such as `--cellType=... --substrate=... --flow=...`
 
 CLI options override the defaults from `CellCounter.properties`.
-
-## Ground-Truth Evaluation
-
-### Evaluate one configuration
-
-```bash
-./run-ground-truth-eval.sh \
-  --video=/path/to/simcell.avi \
-  --truth-events=/path/to/simcell_events.csv \
-  --output-prefix=/tmp/eval_run \
-  --tracking-config=/path/to/CellCounter.properties
-```
-
-Outputs include:
-
-- `<output-prefix>_analysis.csv`
-- `<output-prefix>_footprint.csv`
-- `<output-prefix>_evaluation_metrics.csv`
-
-- Optional score comparison:
-  - provide `--score-reference-config=/path/to/reference.properties`
-  - the evaluator will add a composite score relative to that reference configuration
 
 ## Testing Strategy
 

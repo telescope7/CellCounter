@@ -1,11 +1,11 @@
 {
-  "schema": "cellcounter.simulation.groundtruth.v1",
+  "schema": "cellcounter.simulation.reference.v1",
   "generated_at_utc": "2026-02-27T14:14:12.994860Z",
   "video_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell.avi",
   "legacy_csv_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell.csv",
   "events_csv_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell_events.csv",
   "trajectory_csv_path": "/Users/mthomas/eclipse-workspace/CellCounter/simcell_trajectory.csv",
-  "purpose": "Ground-truth generation for future automated comparison against CellCounter tracking outputs.",
+  "purpose": "Synthetic reference data generation for validation against CellCounter tracking outputs.",
   "parameters": {
     "width": 500,
     "height": 500,
