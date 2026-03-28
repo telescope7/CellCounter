@@ -62,45 +62,43 @@ public final class GroundTruthEvaluationCli {
                 options.matchWindowSeconds(),
                 options.fpsOverride());
 
-        GroundTruthEvaluator.EvaluationResult baselineForScore = null;
-        Double gaScore = null;
-        Double baselineScore = null;
-        if (options.scoreBaselineConfigPath() != null) {
-            TrackingConfiguration baselineConfig = TrackingConfigurationIO.loadFromProperties(
-                    options.scoreBaselineConfigPath());
-            if (TrackingConfigurationIO.canonicalKey(baselineConfig)
+        GroundTruthEvaluator.EvaluationResult referenceForScore = null;
+        Double compositeScore = null;
+        Double referenceScore = null;
+        if (options.scoreReferenceConfigPath() != null) {
+            TrackingConfiguration referenceConfig = TrackingConfigurationIO.loadFromProperties(
+                    options.scoreReferenceConfigPath());
+            if (TrackingConfigurationIO.canonicalKey(referenceConfig)
                     .equals(TrackingConfigurationIO.canonicalKey(options.trackingConfiguration()))) {
-                baselineForScore = result;
+                referenceForScore = result;
             } else {
                 Path outputPrefixPath = Path.of(options.outputPrefix()).toAbsolutePath();
                 Path tmpWorkspace = outputPrefixPath.getParent() == null
-                        ? Path.of(".").toAbsolutePath().resolve("eval_score_tmp")
-                        : outputPrefixPath.getParent().resolve("eval_score_tmp");
+                        ? Path.of(".").toAbsolutePath().resolve("comparison_score_tmp")
+                        : outputPrefixPath.getParent().resolve("comparison_score_tmp");
                 GroundTruthComparisonService comparisonService = new GroundTruthComparisonService(
                         options.videoPath(),
                         options.truthEventsCsv(),
                         options.matchWindowSeconds(),
                         options.fpsOverride(),
-                        tmpWorkspace,
-                        0.0,
-                        0);
-                baselineForScore = comparisonService.evaluate(baselineConfig);
+                        tmpWorkspace);
+                referenceForScore = comparisonService.evaluate(referenceConfig);
             }
-            gaScore = GaFitnessScoring.score(baselineForScore, result);
-            baselineScore = GaFitnessScoring.score(baselineForScore, baselineForScore);
+            compositeScore = EvaluationScoring.score(referenceForScore, result);
+            referenceScore = EvaluationScoring.score(referenceForScore, referenceForScore);
         }
 
-        printResult(result, gaScore, baselineScore, options.scoreBaselineConfigPath());
+        printResult(result, compositeScore, referenceScore, options.scoreReferenceConfigPath());
         Path metricsOutput = options.metricsOutputPath().toAbsolutePath();
-        writeMetricsCsv(metricsOutput, result, gaScore, baselineScore, options.scoreBaselineConfigPath());
+        writeMetricsCsv(metricsOutput, result, compositeScore, referenceScore, options.scoreReferenceConfigPath());
         System.out.println("Wrote evaluation metrics: " + metricsOutput);
     }
 
     private static void printResult(
             GroundTruthEvaluator.EvaluationResult result,
-            Double gaScore,
-            Double baselineScore,
-            Path scoreBaselineConfigPath) {
+            Double compositeScore,
+            Double referenceScore,
+            Path scoreReferenceConfigPath) {
         DecimalFormat f3 = new DecimalFormat("0.000");
         DecimalFormat f4 = new DecimalFormat("0.0000");
 
@@ -125,12 +123,12 @@ public final class GroundTruthEvaluationCli {
         System.out.println("  W1_time (sec):     " + formatMetric(result.wassersteinTimeSec(), f4));
         System.out.println("  W1_velocity (px/s):" + formatMetric(result.wassersteinVelocityPxPerSec(), f4));
         System.out.println("  MAE_velocity (px/s): " + formatMetric(result.maeVelocityPxPerSec(), f4));
-        if (gaScore != null) {
-            System.out.println("  GA score:          " + formatMetric(gaScore, f4));
-            System.out.println("  GA baseline score: " + formatMetric(baselineScore, f4));
-            System.out.println("  Score baseline cfg:" + scoreBaselineConfigPath.toAbsolutePath());
+        if (compositeScore != null) {
+            System.out.println("  Composite score:   " + formatMetric(compositeScore, f4));
+            System.out.println("  Reference score:   " + formatMetric(referenceScore, f4));
+            System.out.println("  Score reference cfg:" + scoreReferenceConfigPath.toAbsolutePath());
         } else {
-            System.out.println("  GA score:          NA (provide --score-baseline-config to compute)");
+            System.out.println("  Composite score:   NA (provide --score-reference-config to compute)");
         }
     }
 
@@ -144,16 +142,16 @@ public final class GroundTruthEvaluationCli {
     private static void writeMetricsCsv(
             Path output,
             GroundTruthEvaluator.EvaluationResult result,
-            Double gaScore,
-            Double baselineScore,
-            Path scoreBaselineConfigPath) throws IOException {
+            Double compositeScore,
+            Double referenceScore,
+            Path scoreReferenceConfigPath) throws IOException {
         Path parent = output.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
 
         try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(output))) {
-            writer.println("truth_csv,analysis_csv,truth_count,predicted_count,tp,fp,fn,precision,recall,f1,w1_time_sec,w1_velocity_px_per_sec,mae_velocity_px_per_sec,match_window_sec,inferred_fps,matched_velocity_count,ga_score,ga_baseline_score,score_baseline_config");
+            writer.println("truth_csv,analysis_csv,truth_count,predicted_count,tp,fp,fn,precision,recall,f1,w1_time_sec,w1_velocity_px_per_sec,mae_velocity_px_per_sec,match_window_sec,inferred_fps,matched_velocity_count,composite_score,reference_score,score_reference_config");
             writer.printf("%s,%s,%d,%d,%d,%d,%d,%.6f,%.6f,%.6f,%s,%s,%s,%.6f,%.6f,%d,%s,%s,%s%n",
                     escapeCsv(result.truthEventsCsv().toString()),
                     escapeCsv(result.predictedAnalysisCsv().toString()),
@@ -171,9 +169,9 @@ public final class GroundTruthEvaluationCli {
                     result.matchWindowSeconds(),
                     result.inferredFps(),
                     result.matchedVelocityCount(),
-                    formatCsvDouble(gaScore == null ? Double.NaN : gaScore),
-                    formatCsvDouble(baselineScore == null ? Double.NaN : baselineScore),
-                    scoreBaselineConfigPath == null ? "" : escapeCsv(scoreBaselineConfigPath.toAbsolutePath().toString()));
+                    formatCsvDouble(compositeScore == null ? Double.NaN : compositeScore),
+                    formatCsvDouble(referenceScore == null ? Double.NaN : referenceScore),
+                    scoreReferenceConfigPath == null ? "" : escapeCsv(scoreReferenceConfigPath.toAbsolutePath().toString()));
         }
     }
 
@@ -205,8 +203,10 @@ public final class GroundTruthEvaluationCli {
                   --match-window-sec=<double>   (default: 1.0)
                   --fps=<double>                (optional fallback if FPS cannot be inferred from truth CSV)
                   --metrics-out=<path>          (default: <output-prefix>_evaluation_metrics.csv)
-                  --score-baseline-config=<path to baseline tracking config used by GA>
-                  --baseline-tracking-config=<path>   alias of --score-baseline-config
+                  --score-reference-config=<path to reference tracking config for composite score>
+                  --reference-tracking-config=<path>  alias of --score-reference-config
+                  --score-baseline-config=<path>      backward-compatible alias
+                  --baseline-tracking-config=<path>   backward-compatible alias
 
                 Metadata options (forwarded to analysis CSV):
                   --cellType=<value> --substrate=<value> --flow=<value>
@@ -245,7 +245,7 @@ public final class GroundTruthEvaluationCli {
             Double fpsOverride,
             Path metricsOutputPath,
             TrackingConfiguration trackingConfiguration,
-            Path scoreBaselineConfigPath) {
+            Path scoreReferenceConfigPath) {
 
         private static EvaluationOptions parse(String[] args) {
             ParseResult parsed = parseArgs(args);
@@ -263,9 +263,15 @@ public final class GroundTruthEvaluationCli {
             String matchWindowRaw = findOption(parsed.options(), "matchWindowSec");
             String fpsOverrideRaw = findOption(parsed.options(), "fps");
             String metricsOutRaw = findOption(parsed.options(), "metricsOut");
-            String scoreBaselineRaw = findOption(parsed.options(), "scoreBaselineConfig");
-            if (scoreBaselineRaw == null || scoreBaselineRaw.isBlank()) {
-                scoreBaselineRaw = findOption(parsed.options(), "baselineTrackingConfig");
+            String scoreReferenceRaw = findOption(parsed.options(), "scoreReferenceConfig");
+            if (scoreReferenceRaw == null || scoreReferenceRaw.isBlank()) {
+                scoreReferenceRaw = findOption(parsed.options(), "referenceTrackingConfig");
+            }
+            if (scoreReferenceRaw == null || scoreReferenceRaw.isBlank()) {
+                scoreReferenceRaw = findOption(parsed.options(), "scoreBaselineConfig");
+            }
+            if (scoreReferenceRaw == null || scoreReferenceRaw.isBlank()) {
+                scoreReferenceRaw = findOption(parsed.options(), "baselineTrackingConfig");
             }
 
             TrackingConfigurationBuilder trackingBuilder =
@@ -305,11 +311,11 @@ public final class GroundTruthEvaluationCli {
             Path metricsOut = metricsOutRaw == null || metricsOutRaw.isBlank()
                     ? Path.of(outputPrefix + "_evaluation_metrics.csv")
                     : Path.of(metricsOutRaw.trim());
-            Path scoreBaselineConfigPath = null;
-            if (scoreBaselineRaw != null && !scoreBaselineRaw.isBlank()) {
-                scoreBaselineConfigPath = Path.of(scoreBaselineRaw.trim());
-                if (!Files.exists(scoreBaselineConfigPath)) {
-                    throw new IllegalArgumentException("Baseline tracking config file does not exist: " + scoreBaselineConfigPath);
+            Path scoreReferenceConfigPath = null;
+            if (scoreReferenceRaw != null && !scoreReferenceRaw.isBlank()) {
+                scoreReferenceConfigPath = Path.of(scoreReferenceRaw.trim());
+                if (!Files.exists(scoreReferenceConfigPath)) {
+                    throw new IllegalArgumentException("Reference tracking config file does not exist: " + scoreReferenceConfigPath);
                 }
             }
 
@@ -324,7 +330,7 @@ public final class GroundTruthEvaluationCli {
                     fpsOverride,
                     metricsOut,
                     trackingBuilder.build().normalized(),
-                    scoreBaselineConfigPath);
+                    scoreReferenceConfigPath);
         }
 
         private static ParseResult parseArgs(String[] args) {
@@ -427,6 +433,8 @@ public final class GroundTruthEvaluationCli {
                     || "matchwindowsec".equals(normalizedKey)
                     || "fps".equals(normalizedKey)
                     || "metricsout".equals(normalizedKey)
+                    || "scorereferenceconfig".equals(normalizedKey)
+                    || "referencetrackingconfig".equals(normalizedKey)
                     || "scorebaselineconfig".equals(normalizedKey)
                     || "baselinetrackingconfig".equals(normalizedKey)
                     || "trackingconfig".equals(normalizedKey);

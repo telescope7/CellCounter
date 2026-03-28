@@ -10,7 +10,7 @@
   <main class="shell">
     <section class="hero">
       <h1>UI Button and Control Reference</h1>
-      <p>Detailed description of each control in the main Cell Counter window.</p>
+      <p>Detailed description of the current Cell Counter interface, status states, and keyboard shortcuts.</p>
       <div class="chip-row">
         <a class="inline" href="index.html">Back to Help Home</a>
       </div>
@@ -25,39 +25,39 @@
         <tbody>
           <tr>
             <td><strong>Simulator</strong></td>
-            <td>Opens Cell Simulation Studio from the header link to generate synthetic videos and ground truth files.</td>
+            <td>Opens Cell Simulation Studio from the header link to generate synthetic rolling-cell videos and ground-truth CSVs.</td>
           </tr>
           <tr>
             <td><strong>Help</strong></td>
-            <td>Opens this local HTML documentation set in the system browser.</td>
+            <td>Opens the local HTML help set in the system browser.</td>
           </tr>
           <tr>
             <td><strong>Status Chip</strong></td>
-            <td>Shows pipeline state with a color-coded indicator dot. Common values: <code>Waiting for file</code>, <code>Ready</code>, <code>Playing</code>, <code>Paused</code>, <code>Seeking</code>, <code>Fast Analyze</code>, <code>Configured</code>, <code>Complete</code>, <code>Error</code>.</td>
+            <td>Shows the current pipeline state. Common values include <code>Waiting for file</code>, <code>Ready</code>, <code>Playing</code>, <code>Paused</code>, <code>Fast Analyze</code>, <code>Settings</code>, <code>Complete</code>, and <code>Error</code>.</td>
           </tr>
         </tbody>
       </table>
     </section>
 
     <section class="card">
-      <h2>Controls Card: Primary Row</h2>
+      <h2>Main Controls Row</h2>
       <table>
         <thead>
-          <tr><th>Button</th><th>Behavior</th></tr>
+          <tr><th>Control</th><th>Behavior</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Open Video</strong></td><td>Open a file chooser and initialize video + analysis pipeline. Shortcut: <code>O</code>.</td></tr>
-          <tr><td><strong>Fast Analyze</strong></td><td>Run accelerated full-pass analysis without realtime playback timing. Shortcut: <code>F</code>.</td></tr>
-          <tr><td><strong>Play/Analyze</strong></td><td>Toggle realtime play/pause while tracking each frame. Shortcuts: <code>P</code> or <code>K</code>; <code>Esc</code> pauses only.</td></tr>
-          <tr><td><strong>Step</strong></td><td>Advance exactly one frame while paused. Shortcuts: hold <code>Space</code> for repeated stepping, or use <code>.</code> / <code>Right Arrow</code> for single-frame advance.</td></tr>
-          <tr><td><strong>Replay</strong></td><td>Reset analysis and frame pointer to frame 1 using current settings. Shortcut: <code>R</code>.</td></tr>
-          <tr><td><strong>Save Results</strong></td><td>Save both analysis and footprint CSVs in one action. Shortcut: <code>S</code>.</td></tr>
+          <tr><td><strong>Open Video</strong></td><td>Opens a file chooser and initializes the shared analysis pipeline for the selected video. Shortcut: <code>O</code>.</td></tr>
+          <tr><td><strong>Fast Analyze</strong></td><td>Runs a full-pass analysis quickly without realtime playback timing. Shortcut: <code>F</code>.</td></tr>
+          <tr><td><strong>Play/Analyze</strong></td><td>Toggles live playback and analysis. Shortcuts: <code>P</code> or <code>K</code>; <code>Esc</code> pauses only.</td></tr>
+          <tr><td><strong>Step</strong></td><td>Advances exactly one frame while paused. Hold <code>Space</code> for repeated stepping, or use <code>.</code> / <code>Right Arrow</code> for a single-frame step.</td></tr>
+          <tr><td><strong>Replay</strong></td><td>Resets the current video analysis and returns to frame 1 using the active runtime settings. Shortcut: <code>R</code>.</td></tr>
+          <tr><td><strong>Save Results</strong></td><td>Saves both analysis and footprint CSV outputs in one action. Shortcut: <code>S</code>.</td></tr>
         </tbody>
       </table>
     </section>
 
     <section class="card">
-      <h2>Controls Card: Secondary Row</h2>
+      <h2>Secondary Controls Row</h2>
       <table>
         <thead>
           <tr><th>Control</th><th>Behavior</th></tr>
@@ -65,27 +65,23 @@
         <tbody>
           <tr>
             <td><strong>Frame label</strong> (<code>Frame: X/Y</code>)</td>
-            <td>Displays current frame index and total frame count.</td>
-          </tr>
-          <tr>
-            <td><strong>Video position slider</strong></td>
-            <td>Shows frame progress only. It is intentionally read-only and does not support scrubbing/dragging.</td>
+            <td>Displays the current frame number and total frame count. This is a read-only progress indicator and no longer acts as a scrubber.</td>
           </tr>
           <tr>
             <td><strong>Playback Speed label</strong> (<code>Playback Speed: Nx</code>)</td>
-            <td>Displays active playback rate for realtime mode.</td>
+            <td>Displays the active realtime play rate.</td>
           </tr>
           <tr>
             <td><strong>Playback speed slider</strong></td>
-            <td>Adjust play rate (0.1x to 5.0x).</td>
+            <td>Adjusts live playback speed from 0.1x to 5.0x.</td>
           </tr>
           <tr>
             <td><strong>Settings</strong></td>
-            <td>Show or hide the compact inline settings bar for segmentation/tracking parameters. Shortcut: <code>T</code>.</td>
+            <td>Shows or hides the inline settings bar. Settings can be opened before a video is loaded; preview rendering becomes available after a video is initialized. Shortcut: <code>T</code>.</td>
           </tr>
           <tr>
             <td><strong>Mirror Tracking</strong></td>
-            <td>When enabled, the raw pane mirrors the richer foreground tracking overlays, including full history tails and future match regions.</td>
+            <td>When enabled, the raw pane mirrors the same rich overlays shown in the foreground pane, including labels, history tails, and future match regions.</td>
           </tr>
         </tbody>
       </table>
@@ -100,11 +96,11 @@
         <tbody>
           <tr><td><code>O</code></td><td>Open Video</td></tr>
           <tr><td><code>F</code></td><td>Fast Analyze</td></tr>
-          <tr><td><code>P</code> or <code>K</code></td><td>Play / Pause toggle</td></tr>
+          <tr><td><code>P</code> or <code>K</code></td><td>Play/Pause toggle</td></tr>
           <tr><td><code>Esc</code></td><td>Pause only</td></tr>
           <tr><td>hold <code>Space</code></td><td>Repeated frame stepping while held</td></tr>
           <tr><td><code>.</code> or <code>Right Arrow</code></td><td>Single-frame step</td></tr>
-          <tr><td><code>R</code></td><td>Replay / reset video</td></tr>
+          <tr><td><code>R</code></td><td>Replay / reset current video</td></tr>
           <tr><td><code>S</code></td><td>Save Results</td></tr>
           <tr><td><code>T</code></td><td>Show / hide Settings</td></tr>
           <tr><td><code>H</code></td><td>Open Help</td></tr>
@@ -119,10 +115,10 @@
           <tr><th>Panel</th><th>What You See</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Raw Input + Tracks</strong></td><td>Current raw microscopy frame only. If <strong>Mirror Tracking</strong> is enabled, it mirrors the full foreground tracking overlays, including labels, boxes, history tails, and future match regions.</td></tr>
-          <tr><td><strong>Foreground + Tracks</strong></td><td>Current background-subtracted foreground frame with the same live tracking overlays plus full history trails and future match regions.</td></tr>
-          <tr><td><strong>Track Start Distribution</strong></td><td>Histogram + cumulative distribution of track-start times.</td></tr>
-          <tr><td><strong>Speed Distribution</strong></td><td>Histogram + cumulative distribution of observed speeds.</td></tr>
+          <tr><td><strong>Raw Input + Tracks</strong></td><td>The raw microscopy frame. By default this stays visually clean. If <strong>Mirror Tracking</strong> is enabled, it mirrors the same rich overlays used in the foreground pane.</td></tr>
+          <tr><td><strong>Foreground + Tracks</strong></td><td>The background-subtracted diagnostic view with current tracks, full history tails, and future match regions.</td></tr>
+          <tr><td><strong>Track Start Distribution</strong></td><td>Histogram plus cumulative distribution of track-start times.</td></tr>
+          <tr><td><strong>Speed Distribution</strong></td><td>Histogram plus cumulative distribution of observed instantaneous speeds.</td></tr>
         </tbody>
       </table>
     </section>
@@ -131,21 +127,21 @@
       <h2>Settings Bar Controls</h2>
       <table>
         <thead>
-          <tr><th>Bar Control</th><th>Behavior</th></tr>
+          <tr><th>Control</th><th>Behavior</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Numeric steppers</strong></td><td>Adjust segmentation/tracking parameters with compact up/down controls and trigger refreshed preview on the current frame.</td></tr>
-          <tr><td><strong>Enable MOG2 shadows</strong></td><td>Toggle shadow classification in background subtraction.</td></tr>
-          <tr><td><strong>Tracker Algorithm</strong></td><td>Select the assignment method used to match detections to existing tracks during analysis.</td></tr>
-          <tr><td><strong>Apply</strong></td><td>Apply current bar values to active runtime configuration.</td></tr>
-          <tr><td><strong>Reset</strong></td><td>Restore inputs to the currently applied configuration.</td></tr>
-          <tr><td><strong>Hide</strong></td><td>Collapse the settings bar and return to the normal compact controls layout.</td></tr>
+          <tr><td><strong>Numeric steppers</strong></td><td>Compact integer up/down controls for segmentation and tracking parameters. Changing a value requests a refreshed preview when a video is available.</td></tr>
+          <tr><td><strong>Hover help</strong></td><td>Every setting label and control exposes a tooltip describing what the parameter does and how changing it affects tracking.</td></tr>
+          <tr><td><strong>Tracker Algorithm</strong></td><td>Selects the assignment strategy used to match detections to existing tracks.</td></tr>
+          <tr><td><strong>Apply</strong></td><td>Applies the current settings bar values to the active session configuration.</td></tr>
+          <tr><td><strong>Reset</strong></td><td>Restores the inputs to the last applied runtime configuration.</td></tr>
+          <tr><td><strong>Hide</strong></td><td>Collapses the settings bar without discarding the applied configuration.</td></tr>
         </tbody>
       </table>
-      <p class="small">When preview rendering is in progress, parameter inputs are temporarily disabled to prevent race conditions.</p>
+      <p class="small">Inputs are temporarily disabled while a preview is being rendered to prevent overlapping updates.</p>
     </section>
 
-    <p class="footer">For exact parameter behavior, see <a class="inline" href="configuration-reference.html">Configuration Reference</a>.</p>
+    <p class="footer">For exact parameter semantics, see <a class="inline" href="configuration-reference.html">Configuration Reference</a>.</p>
   </main>
 </body>
 </html>

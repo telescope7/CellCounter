@@ -9,7 +9,6 @@ import com.prolymphname.cellcounter.ui.CardPanel;
 import com.prolymphname.cellcounter.ui.ChartRefreshController;
 import com.prolymphname.cellcounter.ui.GradientPanel;
 import com.prolymphname.cellcounter.ui.InlineSettingsPanel;
-import com.prolymphname.cellcounter.ui.ReadOnlySlider;
 import com.prolymphname.cellcounter.ui.StartupSplashWindow;
 import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.jfree.chart.ChartPanel;
@@ -113,10 +112,7 @@ public class CellCounterGUI extends JFrame {
     private JCheckBox mirrorTrackingCheckBox;
     private InlineSettingsPanel settingsPanel;
     private JSlider playbackRateSlider;
-    private JSlider videoPositionSlider;
     private JLabel videoPositionValueLabel;
-    private boolean suppressVideoPositionEvents = false;
-    private SwingWorker<Mat, Void> seekWorker;
     private final FrameDisplaySurface rawVideoSurface = new FrameDisplaySurface();
     private final FrameDisplaySurface foregroundVideoSurface = new FrameDisplaySurface();
 
@@ -283,15 +279,10 @@ public class CellCounterGUI extends JFrame {
         configureIconOnlyButton(resetButton, "Replay (R)");
         saveResultsButton.setToolTipText("Save Results (S)");
 
-        videoPositionSlider = new ReadOnlySlider(0, 0, 0);
-        videoPositionSlider.setOpaque(false);
-        videoPositionSlider.setPreferredSize(new Dimension(260, 28));
-        videoPositionSlider.setMaximumSize(new Dimension(260, 28));
-        videoPositionSlider.setToolTipText("Frame progress");
         videoPositionValueLabel = createChipLabel(formatFrameChipText(0, 0), CHIP_IDLE);
         videoPositionValueLabel.setFont(FONT_LABEL);
         videoPositionValueLabel.setBorder(new EmptyBorder(SPACE_XXS, SPACE_XS, SPACE_XXS, SPACE_XS));
-        videoPositionValueLabel.setPreferredSize(new Dimension(156, 24));
+        videoPositionValueLabel.setPreferredSize(new Dimension(214, 24));
 
         playbackRateSlider = new JSlider(10, 500, 100);
         playbackRateSlider.setOpaque(false);
@@ -331,7 +322,6 @@ public class CellCounterGUI extends JFrame {
         topRow.add(saveResultsButton);
 
         secondRow.add(videoPositionValueLabel);
-        secondRow.add(videoPositionSlider);
         secondRow.add(playbackRateValueLabel);
         secondRow.add(playbackRateSlider);
         secondRow.add(tuneDetectionButton);
@@ -476,7 +466,6 @@ public class CellCounterGUI extends JFrame {
         saveResultsButton.addActionListener(e -> handleSaveResults());
         mirrorTrackingCheckBox.addItemListener(e -> handleMirrorTrackingToggle());
         playbackRateSlider.addChangeListener(e -> handlePlaybackRateChange());
-        videoPositionSlider.addChangeListener(e -> handleVideoPositionSliderChange());
     }
 
     private void bindKeyboardShortcuts() {
@@ -631,14 +620,6 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void handleTuneDetection() {
-        if (!appService.isVideoSuccessfullyInitialized()) {
-            JOptionPane.showMessageDialog(this,
-                    "Load a video first. Settings previews segmentation on the current paused frame.",
-                    "No Video",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
         if (settingsPanel != null && settingsPanel.isPanelVisible()) {
             settingsPanel.hidePanel();
             return;
@@ -719,17 +700,11 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void refreshVideoPositionControls() {
-        if (videoPositionSlider == null || videoPositionValueLabel == null) {
+        if (videoPositionValueLabel == null) {
             return;
         }
 
         if (!appService.isVideoSuccessfullyInitialized()) {
-            suppressVideoPositionEvents = true;
-            videoPositionSlider.setMinimum(0);
-            videoPositionSlider.setMaximum(0);
-            videoPositionSlider.setValue(0);
-            videoPositionSlider.setEnabled(false);
-            suppressVideoPositionEvents = false;
             videoPositionValueLabel.setText(formatFrameChipText(0, 0));
             return;
         }
@@ -737,14 +712,6 @@ public class CellCounterGUI extends JFrame {
         int total = Math.max(1, appService.getFrameCount());
         int currentFrameIndex = Math.max(0, appService.getCurrentFrameNumber() - 1);
         int current = clampInt(currentFrameIndex, 0, total - 1);
-
-        suppressVideoPositionEvents = true;
-        videoPositionSlider.setMinimum(0);
-        videoPositionSlider.setMaximum(total - 1);
-        videoPositionSlider.setValue(current);
-        videoPositionSlider.setEnabled(true);
-        suppressVideoPositionEvents = false;
-
         videoPositionValueLabel.setText(formatFrameChipText(current + 1, total));
     }
 
@@ -1167,66 +1134,6 @@ public class CellCounterGUI extends JFrame {
         }
     }
 
-    private void handleVideoPositionSliderChange() {
-        if (suppressVideoPositionEvents) {
-            return;
-        }
-
-        int selected = videoPositionSlider.getValue();
-        int total = Math.max(1, appService.getFrameCount());
-        videoPositionValueLabel.setText(formatFrameChipText(selected + 1, total));
-
-        if (videoPositionSlider.getValueIsAdjusting()) {
-            return;
-        }
-        if (!appService.isVideoSuccessfullyInitialized()) {
-            return;
-        }
-        if (seekWorker != null && !seekWorker.isDone()) {
-            return;
-        }
-
-        videoTimer.stop();
-        videoPlaying = false;
-        paused = true;
-        setPlayButtonPlaying(false);
-        setPipelineState("Seeking", CHIP_WARNING);
-        setMainControlsEnabled(false);
-
-        final int targetFrame = selected;
-        seekWorker = new SwingWorker<>() {
-            @Override
-            protected Mat doInBackground() {
-                return appService.seekToFrameForGUI(targetFrame);
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    Mat seekFrame = get();
-                    if (seekFrame != null && !seekFrame.empty()) {
-                        showAnalysisFrames(seekFrame, appService.getLastForegroundDisplayFrame());
-                        refreshChartsNow();
-                        setPipelineState(appService.isCaptureActive() ? "Paused" : "Complete",
-                                appService.isCaptureActive() ? CHIP_WARNING : CHIP_ACTIVE);
-                    } else {
-                        setPipelineState("Error", CHIP_WARNING);
-                    }
-                } catch (Exception ex) {
-                    setPipelineState("Error", CHIP_WARNING);
-                    JOptionPane.showMessageDialog(CellCounterGUI.this,
-                            "Failed to seek video: " + ex.getMessage(),
-                            "Seek Error",
-                            JOptionPane.ERROR_MESSAGE);
-                } finally {
-                    setMainControlsEnabled(true);
-                    refreshVideoPositionControls();
-                }
-            }
-        };
-        seekWorker.execute();
-    }
-
     private void handleSaveResults() {
         if (!appService.isVideoSuccessfullyInitialized()) {
             JOptionPane.showMessageDialog(this, "No video has been loaded or analysis performed.", "Error",
@@ -1487,9 +1394,6 @@ public class CellCounterGUI extends JFrame {
         }
         if (playbackRateSlider != null) {
             playbackRateSlider.setEnabled(enabled);
-        }
-        if (videoPositionSlider != null) {
-            videoPositionSlider.setEnabled(enabled);
         }
         if (settingsPanel != null) {
             settingsPanel.setInteractiveEnabled(enabled);

@@ -10,7 +10,7 @@
   <main class="shell">
     <section class="hero">
       <h1>Tracking Configuration Reference</h1>
-      <p>Detailed behavior of every tunable tracking parameter, including value-direction effects.</p>
+      <p>Detailed meaning of each runtime parameter, how it is loaded, and how value changes affect behavior.</p>
       <div class="chip-row">
         <a class="inline" href="index.html">Back to Help Home</a>
       </div>
@@ -19,18 +19,17 @@
     <section class="card">
       <h2>Where Configuration Is Applied</h2>
       <ul>
-        <li><strong>GUI session</strong>: The inline Settings bar modifies active runtime parameters.</li>
-        <li><strong>Startup defaults</strong>: <code>CellCounter.properties</code> is loaded at launch for GUI and headless.</li>
+        <li><strong>Session defaults</strong>: <code>CellCounter.properties</code> is loaded at startup for GUI and headless mode.</li>
+        <li><strong>GUI runtime</strong>: the inline <strong>Settings</strong> bar edits the active session configuration.</li>
         <li><strong>Headless override</strong>: CLI flags and <code>--tracking-config=&lt;file&gt;</code> can override startup defaults.</li>
       </ul>
       <div class="note">
-        <code>CellCounter.properties</code> is now the required default source for startup tracking values.
+        The application expects <code>CellCounter.properties</code> to exist and be valid. It is the required default source for startup tracking values.
       </div>
     </section>
 
     <section class="card">
       <h2>Project Default Properties</h2>
-      <p>The application default tracking values come from <code>CellCounter.properties</code>. Those values are loaded as the shared default configuration for GUI startup and for any code path that requests the default tracking configuration.</p>
       <pre><code>maxFramesDisappeared=7
 minContourArea=15.0
 maxRectCircumference=219.0
@@ -46,6 +45,7 @@ morphologyDilateIterations=1
 normalizedMaskThreshold=19.0
 trackerAlgorithm=GREEDY
 startupSplashSeconds=1.5</code></pre>
+      <p class="small">These are the repository defaults at the time of writing. The current file on disk is the actual source of truth.</p>
     </section>
 
     <section class="card">
@@ -62,111 +62,113 @@ startupSplashSeconds=1.5</code></pre>
         <tbody>
           <tr>
             <td><code>maxFramesDisappeared</code></td>
-            <td>Frames a track can be missing before it is dropped.</td>
-            <td>Tracks survive occlusion longer; less fragmentation.</td>
-            <td>Tracks terminate faster; fewer stale IDs.</td>
+            <td>How many consecutive frames a track can go unmatched before it is retired.</td>
+            <td>Tracks survive detector dropouts longer, but stale IDs can linger.</td>
+            <td>Tracks terminate sooner, which reduces lingering IDs but can fragment real cells.</td>
           </tr>
           <tr>
             <td><code>minContourArea</code></td>
-            <td>Minimum contour area to be treated as a cell candidate.</td>
-            <td>Rejects small noise, but can miss tiny/dim cells.</td>
-            <td>Finds smaller objects, with higher false positives.</td>
+            <td>Minimum contour area allowed to count as a cell candidate.</td>
+            <td>Rejects small speckle noise more aggressively.</td>
+            <td>Allows smaller or dimmer candidates through at the cost of more false positives.</td>
           </tr>
           <tr>
             <td><code>maxRectCircumference</code></td>
-            <td>Maximum allowed contour bounding-rectangle perimeter.</td>
-            <td>Allows larger blobs/merged shapes to pass.</td>
-            <td>Suppresses larger artifacts/merged cells.</td>
+            <td>Maximum allowed perimeter of a contour bounding rectangle.</td>
+            <td>Admits larger blobs and merged objects.</td>
+            <td>Rejects larger artifacts sooner.</td>
           </tr>
           <tr>
             <td><code>maxVerticalDisplacementPixels</code></td>
-            <td>Allowed vertical movement per association step.</td>
-            <td>Tolerates Y jitter/drift and tilted flow.</td>
-            <td>Enforces straighter horizontal rolling.</td>
+            <td>Maximum up/down motion allowed when linking a detection to an existing track.</td>
+            <td>Tolerates more drift or slight tilt in the flow direction.</td>
+            <td>Forces straighter horizontal continuity.</td>
           </tr>
           <tr>
             <td><code>minHorizontalMovementPixels</code></td>
-            <td>Minimum horizontal movement for forward motion acceptance.</td>
-            <td>Stricter movement requirement; may drop slow movers.</td>
-            <td>More permissive; can admit stalls/backward jitter.</td>
+            <td>Minimum horizontal movement required for a valid association.</td>
+            <td>Enforces stronger forward motion and can reject slow movers.</td>
+            <td>Allows more stall tolerance and more leftward centroid jitter.</td>
           </tr>
           <tr>
             <td><code>maxAssociationDistancePixels</code></td>
-            <td>Max centroid distance to link detections into one track.</td>
-            <td>Maintains tracks through larger jumps; more mismatch risk.</td>
-            <td>Tighter ID matching; more track breaks when motion is large.</td>
+            <td>Maximum centroid distance allowed to link a detection to an existing track.</td>
+            <td>Helps bridge larger jumps and temporary detector instability.</td>
+            <td>Tightens identity matching but increases the chance of broken tracks.</td>
           </tr>
           <tr>
             <td><code>mog2HistoryFrames</code></td>
-            <td>Background model history depth for MOG2.</td>
-            <td>More stable background, slower adaptation.</td>
-            <td>Faster adaptation, can absorb slow/standing cells.</td>
+            <td>How much frame history MOG2 uses to model the background.</td>
+            <td>Background adapts more slowly and may preserve slow movers longer.</td>
+            <td>Background adapts faster and can absorb slow or stationary cells.</td>
           </tr>
           <tr>
             <td><code>mog2VarThreshold</code></td>
-            <td>MOG2 variance threshold for foreground decision.</td>
-            <td>More conservative segmentation (fewer detections).</td>
-            <td>More sensitive segmentation (more detections/noise).</td>
+            <td>MOG2 sensitivity threshold for separating foreground from background.</td>
+            <td>Produces a more conservative foreground mask.</td>
+            <td>Produces a more sensitive mask with higher noise risk.</td>
           </tr>
           <tr>
             <td><code>mog2DetectShadows</code></td>
-            <td>Enable/disable MOG2 shadow detection mode.</td>
-            <td>When true, labels possible shadows separately; can reduce some artifacts.</td>
-            <td>When false, simpler foreground model; often preferred for high-contrast captures.</td>
+            <td>Enables or disables MOG2 shadow classification.</td>
+            <td>When enabled, possible shadows are modeled separately.</td>
+            <td>When disabled, the mask is simpler and often easier to interpret for high-contrast videos.</td>
           </tr>
           <tr>
             <td><code>morphologyKernelSize</code></td>
-            <td>Kernel size for morphological ops (auto-normalized to odd).</td>
-            <td>Smoother blobs; can merge nearby objects.</td>
-            <td>Preserves detail; can leave noisy fragments.</td>
+            <td>Kernel size used for morphology cleanup. The app normalizes it to an odd value.</td>
+            <td>Smooths detections more strongly and can merge nearby objects.</td>
+            <td>Preserves more detail but may leave more noise fragments.</td>
           </tr>
           <tr>
             <td><code>morphologyOpenIterations</code></td>
-            <td>Opening passes to remove small bright speckles.</td>
-            <td>More noise cleanup; can erode weak real objects.</td>
-            <td>Less cleanup; more speckle survives.</td>
+            <td>Opening passes used to remove small bright speckles.</td>
+            <td>More cleanup, but more erosion of weak detections.</td>
+            <td>Less cleanup, but more speckle survives.</td>
           </tr>
           <tr>
             <td><code>morphologyDilateIterations</code></td>
-            <td>Dilation passes to expand detected foreground regions.</td>
-            <td>Bridges gaps and strengthens blobs; can over-merge.</td>
-            <td>Less expansion; fragmented detections remain separate.</td>
+            <td>Dilation passes used after opening to strengthen blobs.</td>
+            <td>Bridges small gaps and strengthens weak masks, but can merge nearby cells.</td>
+            <td>Preserves separation, but fragmented detections may remain broken apart.</td>
           </tr>
           <tr>
             <td><code>normalizedMaskThreshold</code></td>
-            <td>Threshold applied to normalized mask (0 to 255).</td>
-            <td>Stricter foreground acceptance; less noise, lower recall.</td>
-            <td>More permissive foreground acceptance; higher recall/noise.</td>
+            <td>Threshold applied after the foreground mask is normalized to 0-255.</td>
+            <td>Makes foreground acceptance stricter.</td>
+            <td>Makes foreground acceptance more permissive.</td>
+          </tr>
+          <tr>
+            <td><code>trackerAlgorithm</code></td>
+            <td>Assignment strategy used when linking detections to existing tracks.</td>
+            <td>Hungarian optimizes the full assignment set globally.</td>
+            <td>Greedy is simpler and faster, but can be less globally optimal in crowded frames.</td>
           </tr>
         </tbody>
       </table>
     </section>
 
     <section class="card">
-      <h2>Normalization and Type Rules</h2>
+      <h2>Normalization Rules</h2>
       <ul>
         <li><code>maxFramesDisappeared</code>, <code>mog2HistoryFrames</code>, and morphology iteration counts are integer values.</li>
-        <li><code>morphologyKernelSize</code> is forced to odd and at least 1.</li>
+        <li><code>morphologyKernelSize</code> is forced to an odd value and at least 1.</li>
         <li><code>normalizedMaskThreshold</code> is clamped to [0, 255].</li>
-        <li>Negative <code>minHorizontalMovementPixels</code> values are valid.</li>
+        <li>Negative <code>minHorizontalMovementPixels</code> values are valid and allow leftward centroid jitter.</li>
       </ul>
     </section>
 
     <section class="card">
-      <h2>Additional Startup Option</h2>
-      <table>
-        <thead><tr><th>Key</th><th>Description</th><th>Default</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><code>startupSplashSeconds</code></td>
-            <td>Duration of the startup splash window in GUI mode. Can also be overridden by JVM property <code>-Dcellcounter.startupSplashSeconds</code>.</td>
-            <td><code>1.5</code></td>
-          </tr>
-        </tbody>
-      </table>
+      <h2>How To Use Settings Safely</h2>
+      <ul>
+        <li>Tune segmentation first, then tune track association behavior.</li>
+        <li>Use the foreground pane as the primary diagnostic surface.</li>
+        <li>Pause on representative frames before changing multiple values in sequence.</li>
+        <li>When major settings change, rerun analysis before exporting.</li>
+      </ul>
     </section>
 
-    <p class="footer">For tuning strategy and error diagnosis, see <a class="inline" href="operations-and-troubleshooting.html">Operations and Troubleshooting</a>.</p>
+    <p class="footer">For operational guidance, see <a class="inline" href="operations-and-troubleshooting.html">Operations and Troubleshooting</a>.</p>
   </main>
 </body>
 </html>

@@ -59,11 +59,11 @@ If OpenCV native library loading fails at runtime, configure your local Java/Ope
 
 Run end-to-end evaluation against a generated truth set:
 
-```bash
-mvn -DskipTests exec:java \
-  -Dexec.mainClass=com.prolymphname.cellcounter.evaluation.GroundTruthEvaluationCli \
-  -Dexec.args="--video=/path/to/simcell.avi --truth-events=/path/to/simcell_events.csv --output-prefix=/tmp/eval_run --tracking-config=/path/to/tracking-config.properties --score-baseline-config=/path/to/baseline-config.properties"
-```
+  ```bash
+  mvn -DskipTests exec:java \
+    -Dexec.mainClass=com.prolymphname.cellcounter.evaluation.GroundTruthEvaluationCli \
+    -Dexec.args="--video=/path/to/simcell.avi --truth-events=/path/to/simcell_events.csv --output-prefix=/tmp/eval_run --tracking-config=/path/to/tracking-config.properties --score-reference-config=/path/to/reference-config.properties"
+  ```
 
 Outputs:
 - CellCounter analysis CSV at `<output-prefix>_analysis.csv`
@@ -76,38 +76,5 @@ Reported minimal metric set:
 - `W1_velocity (px/sec)`
 - `MAE_velocity (px/sec)`
 
-GA-compatible score:
-- Provide `--score-baseline-config` to compute the same score formula used by GA `bestScore`.
-
-## Genetic Algorithm Tuning CLI
-
-Use GA to tune tracking parameters against ground truth:
-
-```bash
-./run-ground-truth-ga.sh \
-  --video=/path/to/simcell.avi \
-  --truth-events=/path/to/simcell_events.csv \
-  --tracking-config=/path/to/tracking-config.example.properties \
-  --generations=8 \
-  --population=16 \
-  --mutation-rate=0.15 \
-  --output-dir=/tmp/ga_run
-```
-
-Required inputs:
-- `--tracking-config`: baseline/default configuration to start from.
-- `--generations`: number of GA generations.
-- `--population`: population pool size.
-- `--mutation-rate`: per-gene mutation probability (0.0 to 1.0).
-
-Runtime note:
-- One generation still evaluates the full population (`baseline + population` candidates).
-- For a quick sanity run, start with:
-  - `--generations=1 --population=2 --mutation-rate=0.1 --candidate-timeout-sec=30 --max-frames=600`
-
-Outputs:
-- `ga_best_tracking_config.properties`
-- `ga_history.csv`
-- `ga_report.txt`
-
-The report includes baseline score, best score, metric deltas, and the optimal configuration.
+Composite comparison score:
+- Provide `--score-reference-config` to compute a composite score relative to a reference configuration.

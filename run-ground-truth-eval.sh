@@ -16,13 +16,13 @@ Example:
     --truth-events=/Users/mthomas/eclipse-workspace/CellCounter/simcell_events.csv \
     --output-prefix=/tmp/eval_run \
     --tracking-config=/Users/mthomas/eclipse-workspace/CellCounter/tracking-config.example.properties \
-    --score-baseline-config=/Users/mthomas/eclipse-workspace/CellCounter/tracking-config.example.properties
+    --score-reference-config=/Users/mthomas/eclipse-workspace/CellCounter/tracking-config.example.properties
 
 Environment:
   OPENCV_LIB_PATH  Native OpenCV library directory (default: /usr/local/opencv/share/java/opencv4)
 Notes:
-  To compute GA-compatible score (same formula as bestScore), provide:
-  --score-baseline-config=<path to the baseline config used in GA>
+  To compute a composite score relative to a reference configuration, provide:
+  --score-reference-config=<path to the reference tracking config>
 USAGE
   exit 1
 fi

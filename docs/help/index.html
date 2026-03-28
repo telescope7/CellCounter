@@ -10,7 +10,7 @@
   <main class="shell">
     <section class="hero">
       <h1>Cell Counter Help</h1>
-      <p>Biomaterials-grade migration tracking, tuning, simulation, and export documentation.</p>
+      <p>Biomaterials-grade migration tracking, interactive tuning, simulation, evaluation, and packaging guidance.</p>
       <div class="chip-row">
         <span class="chip">GUI + Headless</span>
         <span class="chip ok">Ground-Truth Ready</span>
@@ -26,40 +26,52 @@
         <a href="configuration-reference.html">Configuration Reference</a>
         <a href="operations-and-troubleshooting.html">Operations and Troubleshooting</a>
       </div>
-      <p class="small">Tip: this page is opened by the in-app <strong>Help</strong> button in the top-right header.</p>
+      <p class="small">This help set is opened by the in-app <strong>Help</strong> link in the top-right header.</p>
     </section>
 
     <section class="card-grid grid-2">
       <article class="card">
         <h3>Quick Start (GUI)</h3>
         <ol>
+          <li>Optionally open <strong>Settings</strong> before loading a video to preconfigure the session.</li>
           <li>Click <strong>Open Video</strong> and choose a source file.</li>
-          <li>Review both the raw and foreground tracking panes side by side.</li>
-          <li>Set playback speed as needed.</li>
+          <li>Review the <strong>Raw Input + Tracks</strong> and <strong>Foreground + Tracks</strong> panes together.</li>
           <li>Use <strong>Settings</strong> on a representative paused frame.</li>
           <li>Run with <strong>Play/Analyze</strong> or <strong>Fast Analyze</strong>.</li>
-          <li>Save outputs with <strong>Save Results</strong>.</li>
+          <li>Save both output CSVs with <strong>Save Results</strong>.</li>
         </ol>
-        <p class="small">Shortcuts: <code>O</code> open, <code>P</code>/<code>K</code> play-pause, hold <code>Space</code> step, <code>.</code> single-step, <code>R</code> replay, <code>T</code> tune.</p>
+        <p class="small">Shortcuts: <code>O</code> open, <code>P</code>/<code>K</code> play-pause, hold <code>Space</code> step, <code>.</code>/<code>Right Arrow</code> single-step, <code>R</code> replay, <code>T</code> settings, <code>H</code> help.</p>
       </article>
 
       <article class="card">
         <h3>Quick Start (Headless)</h3>
         <pre><code>java -jar cellcounter.jar /path/video.avi /tmp/run01 \
   --tracking-config=/path/CellCounter.properties</code></pre>
-        <p class="small">Headless mode uses the same tracking engine and config semantics as GUI mode.</p>
+        <p class="small">Headless mode uses the same tracking engine and config semantics as the GUI.</p>
       </article>
     </section>
 
-    <section class="card">
-      <h2>What This Help Covers</h2>
-      <ul>
-        <li>Full start-to-finish analysis workflow.</li>
-        <li>Description of every UI control and status behavior.</li>
-        <li>Detailed effect of every tracking configuration parameter.</li>
-        <li>Output file formats, CLI integration, and evaluator/tuning notes.</li>
-        <li>Troubleshooting for OpenCV loading, performance, and tuning quality.</li>
-      </ul>
+    <section class="card-grid grid-2">
+      <article class="card">
+        <h3>Current UI Behavior</h3>
+        <ul>
+          <li>The frame readout is a text indicator only: <code>Frame: X/Y</code>.</li>
+          <li>The raw pane stays visually clean unless <strong>Mirror Tracking</strong> is enabled.</li>
+          <li>The foreground pane is the main diagnostic surface for tracks, history, and future match regions.</li>
+          <li>The status chip reports pipeline state such as <code>Waiting for file</code>, <code>Paused</code>, <code>Fast Analyze</code>, or <code>Complete</code>.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>What This Help Covers</h3>
+        <ul>
+          <li>Start-to-finish GUI workflow.</li>
+          <li>Description of every major button and control.</li>
+          <li>Parameter-by-parameter configuration behavior.</li>
+          <li>Ground-truth evaluation and tuning workflows.</li>
+          <li>Troubleshooting, testing, packaging, signing, and notarization notes.</li>
+        </ul>
+      </article>
     </section>
 
     <p class="footer">Cell Counter | Biomaterials Intelligence</p>

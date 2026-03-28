@@ -15,6 +15,7 @@ import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingWorker;
+import javax.swing.ToolTipManager;
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -43,6 +44,10 @@ import static com.prolymphname.cellcounter.ui.CellCounterUiTheme.TEXT_PRIMARY;
 import static com.prolymphname.cellcounter.ui.CellCounterUiTheme.TEXT_SECONDARY;
 
 public class InlineSettingsPanel extends CardPanel {
+    private static final int LABEL_WIDTH = 178;
+    private static final int NUMERIC_CONTROL_WIDTH = 118;
+    private static final int COMBO_CONTROL_WIDTH = 156;
+
     private final CellCounterApplicationService appService;
     private final Consumer<TuningPreviewFrames> previewConsumer;
     private final Consumer<TrackingConfiguration> applyConsumer;
@@ -91,6 +96,9 @@ public class InlineSettingsPanel extends CardPanel {
     public void showPanel(TrackingConfiguration configuration) {
         appliedConfiguration = configuration;
         loadControlsFromConfiguration(configuration);
+        statusLabel.setText(appService.isVideoSuccessfullyInitialized()
+                ? "Adjust values to preview on the current frame."
+                : "No video loaded. Adjust settings now or load a video to preview the current frame.");
         setVisible(true);
         requestPreview();
     }
@@ -118,6 +126,9 @@ public class InlineSettingsPanel extends CardPanel {
         JLabel title = new JLabel("Settings");
         title.setFont(FONT_H2);
         title.setForeground(TEXT_PRIMARY);
+        title.setToolTipText(createTooltipHtml(
+                "Settings",
+                "Inline runtime controls for segmentation and tracking. Adjust values while paused to preview the current frame, then apply them to the active session."));
 
         JPanel header = new JPanel();
         header.setOpaque(false);
@@ -126,26 +137,29 @@ public class InlineSettingsPanel extends CardPanel {
         header.add(Box.createHorizontalGlue());
         add(header, BorderLayout.NORTH);
 
-        mog2HistorySpinner = createIntegerSpinner(30, 1200, 500, 10);
-        mog2VarThresholdSpinner = createIntegerSpinner(1, 200, 50, 1);
-        maskThresholdSpinner = createIntegerSpinner(0, 255, 25, 1);
-        minContourAreaSpinner = createIntegerSpinner(0, 600, 5, 1);
-        maxRectCircumferenceSpinner = createIntegerSpinner(20, 500, 90, 1);
-        morphologyKernelSpinner = createIntegerSpinner(1, 15, 3, 2);
-        morphologyOpenSpinner = createIntegerSpinner(0, 8, 2, 1);
-        morphologyDilateSpinner = createIntegerSpinner(0, 8, 2, 1);
-        maxAssociationDistanceSpinner = createIntegerSpinner(30, 350, 175, 1);
-        maxFramesDisappearedSpinner = createIntegerSpinner(1, 1000, 10, 1);
-        maxVerticalDisplacementSpinner = createIntegerSpinner(0, 500, 40, 1);
-        minHorizontalMovementSpinner = createIntegerSpinner(-100, 100, -3, 1);
+        mog2HistorySpinner = createIntegerSpinner(30, 1200, 500, 10, NUMERIC_CONTROL_WIDTH);
+        mog2VarThresholdSpinner = createIntegerSpinner(1, 200, 50, 1, NUMERIC_CONTROL_WIDTH);
+        maskThresholdSpinner = createIntegerSpinner(0, 255, 25, 1, NUMERIC_CONTROL_WIDTH);
+        minContourAreaSpinner = createIntegerSpinner(0, 600, 5, 1, NUMERIC_CONTROL_WIDTH);
+        maxRectCircumferenceSpinner = createIntegerSpinner(20, 500, 90, 1, NUMERIC_CONTROL_WIDTH);
+        morphologyKernelSpinner = createIntegerSpinner(1, 15, 3, 2, NUMERIC_CONTROL_WIDTH);
+        morphologyOpenSpinner = createIntegerSpinner(0, 8, 2, 1, NUMERIC_CONTROL_WIDTH);
+        morphologyDilateSpinner = createIntegerSpinner(0, 8, 2, 1, NUMERIC_CONTROL_WIDTH);
+        maxAssociationDistanceSpinner = createIntegerSpinner(30, 350, 175, 1, NUMERIC_CONTROL_WIDTH);
+        maxFramesDisappearedSpinner = createIntegerSpinner(1, 1000, 10, 1, NUMERIC_CONTROL_WIDTH);
+        maxVerticalDisplacementSpinner = createIntegerSpinner(0, 500, 40, 1, NUMERIC_CONTROL_WIDTH);
+        minHorizontalMovementSpinner = createIntegerSpinner(-100, 100, -3, 1, NUMERIC_CONTROL_WIDTH);
 
-        detectShadowsCheckBox = new JCheckBox("Enable MOG2 shadows");
+        detectShadowsCheckBox = new JCheckBox("Enabled");
         detectShadowsCheckBox.setSelected(false);
         styleConfigCheckBox(detectShadowsCheckBox);
+        detectShadowsCheckBox.setFont(FONT_LABEL);
 
         trackerAlgorithmCombo = new JComboBox<>(TrackerAlgorithm.values());
         trackerAlgorithmCombo.setFont(FONT_LABEL);
-        trackerAlgorithmCombo.setPreferredSize(new Dimension(120, 26));
+        trackerAlgorithmCombo.setPreferredSize(new Dimension(COMBO_CONTROL_WIDTH, 26));
+        trackerAlgorithmCombo.setMinimumSize(new Dimension(COMBO_CONTROL_WIDTH, 26));
+        trackerAlgorithmCombo.setMaximumSize(new Dimension(COMBO_CONTROL_WIDTH, 26));
 
         JPanel groups = new JPanel(new GridBagLayout());
         groups.setOpaque(false);
@@ -156,27 +170,41 @@ public class InlineSettingsPanel extends CardPanel {
         groupGbc.fill = GridBagConstraints.HORIZONTAL;
         groupGbc.insets = new Insets(0, 0, 0, SPACE_XS);
         groups.add(createSettingsGroup("Segmentation", List.of(
-                new RowSpec("History", mog2HistorySpinner),
-                new RowSpec("Variance", mog2VarThresholdSpinner),
-                new RowSpec("Mask Threshold", maskThresholdSpinner),
-                new RowSpec("Min Contour", minContourAreaSpinner),
-                new RowSpec("Max Circumf.", maxRectCircumferenceSpinner))), groupGbc);
+                new RowSpec("Background History Frames", mog2HistorySpinner,
+                        "How many prior frames MOG2 remembers for its background model. Larger values adapt more slowly and can help preserve slow-moving cells."),
+                new RowSpec("Variance Threshold", mog2VarThresholdSpinner,
+                        "Sensitivity used by MOG2 to classify pixels as foreground or background. Lower values detect more subtle motion but can increase noise."),
+                new RowSpec("Normalized Mask Threshold", maskThresholdSpinner,
+                        "Threshold applied after the foreground mask is normalized to 0-255. Lower values accept weaker foreground pixels; higher values are stricter."),
+                new RowSpec("Minimum Contour Area", minContourAreaSpinner,
+                        "Smallest contour area allowed to count as a cell candidate. Increase to reject speckle noise; decrease to keep dim or tiny cells."),
+                new RowSpec("Maximum Box Circumference", maxRectCircumferenceSpinner,
+                        "Largest bounding-rectangle perimeter allowed for a detection. Lower values reject merged blobs; higher values admit larger objects."))), groupGbc);
 
         groupGbc.gridx++;
         groups.add(createSettingsGroup("Morphology", List.of(
-                new RowSpec("Kernel (odd)", morphologyKernelSpinner),
-                new RowSpec("Open Iter.", morphologyOpenSpinner),
-                new RowSpec("Dilate Iter.", morphologyDilateSpinner),
-                new RowSpec("Shadows", detectShadowsCheckBox))), groupGbc);
+                new RowSpec("Kernel Size (odd)", morphologyKernelSpinner,
+                        "Kernel width used for morphology cleanup. The value is forced to an odd number so the operation has a centered anchor."),
+                new RowSpec("Open Iterations", morphologyOpenSpinner,
+                        "Number of opening passes used to remove small bright noise. Higher values clean more aggressively but can erode weak cells."),
+                new RowSpec("Dilate Iterations", morphologyDilateSpinner,
+                        "Number of dilation passes used after opening. Higher values strengthen blobs and bridge gaps, but can merge nearby cells."),
+                new RowSpec("Detect Shadows in MOG2", detectShadowsCheckBox,
+                        "Enable OpenCV MOG2 shadow detection. This can help in some videos, but it may also complicate the foreground mask."))), groupGbc);
 
         groupGbc.gridx++;
         groupGbc.insets = new Insets(0, 0, 0, 0);
         groups.add(createSettingsGroup("Tracking", List.of(
-                new RowSpec("Association", maxAssociationDistanceSpinner),
-                new RowSpec("Disappear", maxFramesDisappearedSpinner),
-                new RowSpec("Max Vertical", maxVerticalDisplacementSpinner),
-                new RowSpec("Min Horiz.", minHorizontalMovementSpinner),
-                new RowSpec("Algorithm", trackerAlgorithmCombo))), groupGbc);
+                new RowSpec("Maximum Association Distance", maxAssociationDistanceSpinner,
+                        "Largest allowed centroid distance for matching a new detection to an existing track. Increase to reacquire bigger jumps; decrease to reduce mismatches."),
+                new RowSpec("Maximum Missed Frames", maxFramesDisappearedSpinner,
+                        "How many frames a track can go unmatched before it is dropped. Increase for more persistence through occlusion or weak detection."),
+                new RowSpec("Maximum Vertical Displacement", maxVerticalDisplacementSpinner,
+                        "Largest allowed up/down movement between matched detections. Increase if cells drift vertically or the camera is tilted."),
+                new RowSpec("Minimum Horizontal Movement", minHorizontalMovementSpinner,
+                        "Minimum allowed left-to-right movement. Negative values tolerate a little backward jitter; larger positive values enforce stronger forward motion."),
+                new RowSpec("Tracker Algorithm", trackerAlgorithmCombo,
+                        "Assignment method used when matching detections to existing tracks. Greedy is faster and simpler; Hungarian optimizes the full assignment set."))), groupGbc);
 
         add(groups, BorderLayout.CENTER);
 
@@ -205,6 +233,7 @@ public class InlineSettingsPanel extends CardPanel {
         add(actionRow, BorderLayout.SOUTH);
         registerListeners();
         updateInteractiveState();
+        ToolTipManager.sharedInstance().setInitialDelay(150);
     }
 
     private CardPanel createSettingsGroup(String title, List<RowSpec> rows) {
@@ -225,7 +254,7 @@ public class InlineSettingsPanel extends CardPanel {
         gbc.insets = new Insets(0, 0, SPACE_XXS, 0);
 
         for (RowSpec row : rows) {
-            content.add(createCompactRow(row.label(), row.component()), gbc);
+            content.add(createCompactRow(row.label(), row.component(), row.tooltip()), gbc);
             gbc.gridy++;
         }
 
@@ -234,30 +263,38 @@ public class InlineSettingsPanel extends CardPanel {
         return group;
     }
 
-    private JPanel createCompactRow(String labelText, JComponent component) {
+    private JPanel createCompactRow(String labelText, JComponent component, String tooltipText) {
         JPanel row = new JPanel(new BorderLayout(SPACE_XS, 0));
         row.setOpaque(false);
 
         JLabel label = new JLabel(labelText);
         label.setFont(FONT_LABEL);
         label.setForeground(TEXT_SECONDARY);
-        label.setPreferredSize(new Dimension(92, 22));
+        label.setPreferredSize(new Dimension(LABEL_WIDTH, 22));
+        String tooltip = createTooltipHtml(labelText, tooltipText);
+        label.setToolTipText(tooltip);
+        component.setToolTipText(tooltip);
+
+        JPanel componentWrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        componentWrapper.setOpaque(false);
+        componentWrapper.add(component);
 
         row.add(label, BorderLayout.WEST);
-        row.add(component, BorderLayout.CENTER);
+        row.add(componentWrapper, BorderLayout.CENTER);
         return row;
     }
 
-    private JSpinner createIntegerSpinner(int min, int max, int value, int step) {
+    private JSpinner createIntegerSpinner(int min, int max, int value, int step, int width) {
         JSpinner spinner = new JSpinner(new SpinnerNumberModel(value, min, max, step));
-        styleSpinner(spinner);
+        styleSpinner(spinner, width);
         return spinner;
     }
 
-    private void styleSpinner(JSpinner spinner) {
+    private void styleSpinner(JSpinner spinner, int width) {
         spinner.setFont(FONT_LABEL);
-        spinner.setPreferredSize(new Dimension(82, 24));
-        spinner.setMaximumSize(new Dimension(82, 24));
+        spinner.setPreferredSize(new Dimension(width, 24));
+        spinner.setMinimumSize(new Dimension(width, 24));
+        spinner.setMaximumSize(new Dimension(width, 24));
         JSpinner.DefaultEditor editor = (JSpinner.DefaultEditor) spinner.getEditor();
         JFormattedTextField textField = editor.getTextField();
         textField.setColumns(4);
@@ -267,6 +304,20 @@ public class InlineSettingsPanel extends CardPanel {
         textField.setCaretColor(Color.BLACK);
         NumberFormat format = ((JSpinner.NumberEditor) spinner.getEditor()).getFormat();
         format.setGroupingUsed(false);
+    }
+
+    private String createTooltipHtml(String title, String description) {
+        return "<html><div style='width: 260px; padding: 4px 6px;'>"
+                + "<b>" + escapeHtml(title) + "</b><br/>"
+                + escapeHtml(description)
+                + "</div></html>";
+    }
+
+    private String escapeHtml(String text) {
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private void registerListeners() {
@@ -307,6 +358,10 @@ public class InlineSettingsPanel extends CardPanel {
 
     private void requestPreview() {
         if (suppressPreview || !isVisible() || !externallyEnabled) {
+            return;
+        }
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            statusLabel.setText("No video loaded. Apply updates now or load a video to preview the current frame.");
             return;
         }
         TrackingConfiguration requestedConfig = buildWorkingConfiguration();
@@ -435,6 +490,6 @@ public class InlineSettingsPanel extends CardPanel {
         return normalized % 2 == 0 ? normalized + 1 : normalized;
     }
 
-    private record RowSpec(String label, JComponent component) {
+    private record RowSpec(String label, JComponent component, String tooltip) {
     }
 }

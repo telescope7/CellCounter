@@ -16,8 +16,6 @@ public final class GroundTruthComparisonService {
     private final double matchWindowSeconds;
     private final Double fpsOverride;
     private final Path workspaceDir;
-    private final double candidateTimeoutSeconds;
-    private final int maxFramesToProcess;
     private final GroundTruthEvaluator evaluator;
 
     public GroundTruthComparisonService(
@@ -25,22 +23,18 @@ public final class GroundTruthComparisonService {
             Path truthEventsCsv,
             double matchWindowSeconds,
             Double fpsOverride,
-            Path workspaceDir,
-            double candidateTimeoutSeconds,
-            int maxFramesToProcess) {
+            Path workspaceDir) {
         this.videoPath = videoPath.toAbsolutePath();
         this.truthEventsCsv = truthEventsCsv.toAbsolutePath();
         this.matchWindowSeconds = matchWindowSeconds;
         this.fpsOverride = fpsOverride;
         this.workspaceDir = workspaceDir.toAbsolutePath();
-        this.candidateTimeoutSeconds = candidateTimeoutSeconds;
-        this.maxFramesToProcess = maxFramesToProcess;
         this.evaluator = new GroundTruthEvaluator();
     }
 
     public GroundTruthEvaluator.EvaluationResult evaluate(TrackingConfiguration configuration) throws IOException {
         Files.createDirectories(workspaceDir);
-        Path analysisCsv = Files.createTempFile(workspaceDir, "ga_eval_", "_analysis.csv");
+        Path analysisCsv = Files.createTempFile(workspaceDir, "comparison_eval_", "_analysis.csv");
         try {
             runHeadlessAnalysis(configuration, analysisCsv);
             return evaluator.evaluate(truthEventsCsv, analysisCsv, matchWindowSeconds, fpsOverride);
@@ -77,25 +71,8 @@ public final class GroundTruthComparisonService {
             }
 
             Mat processedFrame;
-            int processedFrames = 0;
-            long startedNanos = System.nanoTime();
             while ((processedFrame = appService.processNextFrameForAnalysis()) != null) {
                 processedFrame.release();
-                processedFrames++;
-
-                if (maxFramesToProcess > 0 && processedFrames >= maxFramesToProcess) {
-                    break;
-                }
-
-                if (candidateTimeoutSeconds > 0.0) {
-                    double elapsedSec = (System.nanoTime() - startedNanos) / 1_000_000_000.0;
-                    if (elapsedSec > candidateTimeoutSeconds) {
-                        throw new IllegalStateException(String.format(
-                                "Candidate evaluation timed out after %.2f sec at frame %d",
-                                elapsedSec,
-                                processedFrames));
-                    }
-                }
             }
 
             appService.saveAnalysisCsv(analysisCsv.toFile(), ExportMetadata.EMPTY);
