@@ -40,6 +40,19 @@ public class CellCounterApplicationServiceTest {
     }
 
     @Test
+    public void previewCurrentFramePairForTuning_combinesRawAndForegroundPreviewCalls() {
+        StubTrackingAdapter adapter = new StubTrackingAdapter();
+        CellCounterApplicationService service = new CellCounterApplicationService(adapter, new AnalysisExportService());
+
+        try (TuningPreviewFrames frames = service.previewCurrentFramePairForTuning(TrackingConfiguration.defaults())) {
+            assertNull(frames.rawFrame());
+            assertNull(frames.foregroundFrame());
+            assertEquals(1, adapter.rawPreviewCallCount);
+            assertEquals(1, adapter.foregroundPreviewCallCount);
+        }
+    }
+
+    @Test
     public void mirrorTrackingFlag_delegatesToAdapter() {
         StubTrackingAdapter adapter = new StubTrackingAdapter();
         CellCounterApplicationService service = new CellCounterApplicationService(adapter, new AnalysisExportService());
@@ -53,6 +66,10 @@ public class CellCounterApplicationServiceTest {
     private static final class StubTrackingAdapter implements TrackingAdapter {
         private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
         private boolean mirrorTrackingInRawEnabled = false;
+        private Mat rawPreview;
+        private Mat foregroundPreview;
+        private int rawPreviewCallCount = 0;
+        private int foregroundPreviewCallCount = 0;
 
         @Override
         public boolean initializeVideo(String videoPath) {
@@ -128,10 +145,6 @@ public class CellCounterApplicationServiceTest {
         }
 
         @Override
-        public void setDisplayMOG2Foreground(boolean show) {
-        }
-
-        @Override
         public void setMirrorTrackingInRawEnabled(boolean show) {
             mirrorTrackingInRawEnabled = show;
         }
@@ -156,8 +169,15 @@ public class CellCounterApplicationServiceTest {
         }
 
         @Override
-        public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
-            return null;
+        public Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
+            rawPreviewCallCount++;
+            return rawPreview;
+        }
+
+        @Override
+        public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
+            foregroundPreviewCallCount++;
+            return foregroundPreview;
         }
 
         @Override

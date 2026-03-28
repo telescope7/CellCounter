@@ -85,10 +85,6 @@ public class CellCounterApplicationService {
         return trackingAdapter.getLastForegroundDisplayFrame();
     }
 
-    public void setDisplayMOG2Foreground(boolean show) {
-        trackingAdapter.setDisplayMOG2Foreground(show);
-    }
-
     public void setMirrorTrackingInRawEnabled(boolean show) {
         trackingAdapter.setMirrorTrackingInRawEnabled(show);
     }
@@ -109,15 +105,11 @@ public class CellCounterApplicationService {
         trackingAdapter.setTrackingConfiguration(trackingConfiguration);
     }
 
-    public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
-        return trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, showMaskView);
-    }
-
     public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
-        Mat rawPreview = trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, false);
+        Mat rawPreview = trackingAdapter.previewRawCurrentFrameForTuning(trackingConfiguration);
         Mat foregroundPreview = null;
         try {
-            foregroundPreview = trackingAdapter.previewCurrentFrameForTuning(trackingConfiguration, true);
+            foregroundPreview = trackingAdapter.previewForegroundCurrentFrameForTuning(trackingConfiguration);
             return new TuningPreviewFrames(rawPreview, foregroundPreview);
         } catch (RuntimeException ex) {
             if (rawPreview != null) {

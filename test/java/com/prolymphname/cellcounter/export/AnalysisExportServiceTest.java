@@ -149,11 +149,6 @@ public class AnalysisExportServiceTest {
         }
 
         @Override
-        public void setDisplayMOG2Foreground(boolean show) {
-            throw unsupported();
-        }
-
-        @Override
         public void setMirrorTrackingInRawEnabled(boolean show) {
             throw unsupported();
         }
@@ -179,7 +174,12 @@ public class AnalysisExportServiceTest {
         }
 
         @Override
-        public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
+        public Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
+            throw unsupported();
+        }
+
+        @Override
+        public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
             throw unsupported();
         }
 

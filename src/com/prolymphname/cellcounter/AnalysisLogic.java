@@ -37,7 +37,6 @@ public class AnalysisLogic {
 	private CentroidTracker cellTracker;
 	private String videoFilename;
 	private Mat referenceFrame = null;
-	private boolean displayMOG2Foreground = false;
 	private boolean mirrorTrackingInRaw = false;
 	private Mat currentRawFrameForDisplay = null;
 	private Mat lastForegroundMaskForDisplay = null;
@@ -329,7 +328,6 @@ public class AnalysisLogic {
 		rebuildTrackingPipeline();
 		this.trackStartTimes.clear();
 		this.speeds.clear();
-		this.displayMOG2Foreground = false; // Default view
 		if (this.lastForegroundDisplayFrame != null) {
 			this.lastForegroundDisplayFrame.release();
 			this.lastForegroundDisplayFrame = null;
@@ -601,7 +599,15 @@ public class AnalysisLogic {
 		}
 	}
 
-	public Mat previewCurrentFrameForTuning(TrackingConfiguration previewConfiguration, boolean showMaskView) {
+	public Mat previewRawCurrentFrameForTuning(TrackingConfiguration previewConfiguration) {
+		return previewDisplayFrameForTuning(previewConfiguration, false);
+	}
+
+	public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration previewConfiguration) {
+		return previewDisplayFrameForTuning(previewConfiguration, true);
+	}
+
+	private Mat previewDisplayFrameForTuning(TrackingConfiguration previewConfiguration, boolean renderForegroundMask) {
 		if (!videoSuccessfullyInitialized || videoFilename == null || videoFilename.isBlank()) {
 			return null;
 		}
@@ -623,7 +629,6 @@ public class AnalysisLogic {
 				cfg.isMog2DetectShadows());
 
 		Mat frame = new Mat();
-		Mat fgmask = new Mat();
 		Mat previewDisplay = null;
 
 		try {
@@ -643,47 +648,36 @@ public class AnalysisLogic {
 						referenceFrame,
 						previewSubtractor,
 						cfg)) {
-					if (frameIndex == targetFrameIndex) {
-						previewDisplay = displayFrameRenderer.renderPreviewFrame(
-								frame,
-								detection.mask(),
-								detection.rects(),
-								showMaskView);
+						if (frameIndex == targetFrameIndex) {
+							previewDisplay = renderForegroundMask
+									? displayFrameRenderer.renderForegroundPreviewFrame(detection.mask(), detection.rects())
+									: displayFrameRenderer.renderRawPreviewFrame(frame, detection.rects());
+						}
 					}
-				}
-				frameIndex++;
+					frameIndex++;
 			}
 
-			if (previewDisplay == null && currentRawFrameForDisplay != null && !currentRawFrameForDisplay.empty()) {
-				try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
-						currentRawFrameForDisplay,
-						referenceFrame,
-						previewSubtractor,
-						cfg)) {
-					previewDisplay = displayFrameRenderer.renderPreviewFrame(
+				if (previewDisplay == null && currentRawFrameForDisplay != null && !currentRawFrameForDisplay.empty()) {
+					try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
 							currentRawFrameForDisplay,
-							detection.mask(),
-							detection.rects(),
-							showMaskView);
+							referenceFrame,
+							previewSubtractor,
+							cfg)) {
+						previewDisplay = renderForegroundMask
+								? displayFrameRenderer.renderForegroundPreviewFrame(
+										detection.mask(),
+										detection.rects())
+								: displayFrameRenderer.renderRawPreviewFrame(
+										currentRawFrameForDisplay,
+										detection.rects());
+					}
 				}
-			}
-		} finally {
+			} finally {
 			frame.release();
-			fgmask.release();
 			previewCap.release();
 		}
 
 		return previewDisplay;
-	}
-
-	// Add this new method to AnalysisLogic.java
-	public void setDisplayMOG2Foreground(boolean show) {
-		boolean changed = (this.displayMOG2Foreground != show);
-		this.displayMOG2Foreground = show;
-
-		if (changed) {
-			rerenderCurrentDisplayFrame();
-		}
 	}
 
 	public void setMirrorTrackingInRawEnabled(boolean show) {
@@ -715,7 +709,7 @@ public class AnalysisLogic {
 
 	private Mat renderDisplayFromCurrentState(
 			Mat sourceFrame,
-			boolean showMaskView,
+			boolean renderForegroundMask,
 			Mat precomputedMask,
 			boolean showTrackingOverlay,
 			boolean showTrackTrails,
@@ -730,7 +724,7 @@ public class AnalysisLogic {
 			try {
 				return displayFrameRenderer.renderTrackedFrame(
 						sourceFrame,
-						showMaskView,
+						renderForegroundMask,
 						maskForDisplay,
 						showTrackingOverlay ? buildTrackedOverlays() : List.of(),
 						showTrackTrails,

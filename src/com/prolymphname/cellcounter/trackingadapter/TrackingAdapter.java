@@ -35,8 +35,6 @@ public interface TrackingAdapter {
 
     Mat getLastForegroundDisplayFrame();
 
-    void setDisplayMOG2Foreground(boolean show);
-
     void setMirrorTrackingInRawEnabled(boolean show);
 
     boolean isMirrorTrackingInRawEnabled();
@@ -47,7 +45,9 @@ public interface TrackingAdapter {
 
     void setTrackingConfiguration(TrackingConfiguration trackingConfiguration);
 
-    Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView);
+    Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration);
+
+    Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration);
 
     List<TrackedCell> getTrackedCells();
 }

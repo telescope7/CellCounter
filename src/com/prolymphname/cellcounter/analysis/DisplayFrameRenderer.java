@@ -26,7 +26,7 @@ public class DisplayFrameRenderer {
 
     public Mat renderTrackedFrame(
             Mat sourceFrame,
-            boolean showMaskView,
+            boolean renderForegroundMask,
             Mat maskForDisplay,
             List<TrackedOverlay> overlays,
             boolean showTrackTrails,
@@ -36,7 +36,7 @@ public class DisplayFrameRenderer {
             double maxVerticalDisplacementPixels,
             double maxAssociationDistancePixels) {
         Mat displayOutput;
-        if (showMaskView) {
+        if (renderForegroundMask) {
             displayOutput = new Mat();
             Imgproc.cvtColor(maskForDisplay, displayOutput, Imgproc.COLOR_GRAY2BGR);
         } else {
@@ -102,28 +102,35 @@ public class DisplayFrameRenderer {
         return displayOutput;
     }
 
-    public Mat renderPreviewFrame(Mat sourceFrame, Mat maskForDisplay, List<Rect> rects, boolean showMaskView) {
-        Mat display;
-        if (showMaskView) {
-            display = new Mat();
-            Imgproc.cvtColor(maskForDisplay, display, Imgproc.COLOR_GRAY2BGR);
-        } else {
-            display = sourceFrame.clone();
-        }
+    public Mat renderRawPreviewFrame(Mat sourceFrame, List<Rect> rects) {
+        return renderPreviewFrame(sourceFrame.clone(), rects);
+    }
 
-        for (Rect rect : rects) {
-            Imgproc.rectangle(display, rect.tl(), rect.br(), PREVIEW_COLOR, 1);
-            Point centroid = new Point(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-            Imgproc.circle(display, centroid, 2, PREVIEW_COLOR, 1);
-        }
+    public Mat renderForegroundPreviewFrame(Mat maskForDisplay, List<Rect> rects) {
+        Mat display = new Mat();
+        Imgproc.cvtColor(maskForDisplay, display, Imgproc.COLOR_GRAY2BGR);
+        return renderPreviewFrame(display, rects);
+    }
 
-        Imgproc.putText(display, "Preview detections: " + rects.size(),
-                new Point(12, 24),
-                Imgproc.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                PREVIEW_COLOR,
-                2);
-        return display;
+    private Mat renderPreviewFrame(Mat display, List<Rect> rects) {
+        try {
+            for (Rect rect : rects) {
+                Imgproc.rectangle(display, rect.tl(), rect.br(), PREVIEW_COLOR, 1);
+                Point centroid = new Point(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+                Imgproc.circle(display, centroid, 2, PREVIEW_COLOR, 1);
+            }
+
+            Imgproc.putText(display, "Preview detections: " + rects.size(),
+                    new Point(12, 24),
+                    Imgproc.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    PREVIEW_COLOR,
+                    2);
+            return display;
+        } catch (RuntimeException ex) {
+            display.release();
+            throw ex;
+        }
     }
 
     private Scalar resolveTrackColor(TrackedOverlay overlay) {

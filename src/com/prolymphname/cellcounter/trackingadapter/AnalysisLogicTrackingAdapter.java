@@ -92,11 +92,6 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
-    public void setDisplayMOG2Foreground(boolean show) {
-        analysisLogic.setDisplayMOG2Foreground(show);
-    }
-
-    @Override
     public void setMirrorTrackingInRawEnabled(boolean show) {
         analysisLogic.setMirrorTrackingInRawEnabled(show);
     }
@@ -122,8 +117,13 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
-    public Mat previewCurrentFrameForTuning(TrackingConfiguration trackingConfiguration, boolean showMaskView) {
-        return analysisLogic.previewCurrentFrameForTuning(trackingConfiguration, showMaskView);
+    public Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
+        return analysisLogic.previewRawCurrentFrameForTuning(trackingConfiguration);
+    }
+
+    @Override
+    public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
+        return analysisLogic.previewForegroundCurrentFrameForTuning(trackingConfiguration);
     }
 
     @Override
