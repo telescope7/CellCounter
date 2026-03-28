@@ -8,6 +8,7 @@
 /target/
 /packaging/
 /ga-tuning-output/
+/CellCounter.tar.gz
 
 # Generated analysis exports
 /*_analysis.csv
