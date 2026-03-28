@@ -15,13 +15,14 @@ public class TrackedOverlayTest {
         TrackedOverlay overlay = new TrackedOverlay(
                 42,
                 new Rect(10, 20, 18, 12),
+                143.2,
                 new Point(19, 26),
                 TrackVisualState.STABLE,
                 0,
                 false,
                 List.of());
 
-        assertEquals("ID 42 18x12 px", overlay.labelText(true));
+        assertEquals("ID 42 A=143 px^2", overlay.labelText(true));
         assertEquals("ID 42", overlay.labelText(false));
     }
 
@@ -30,12 +31,13 @@ public class TrackedOverlayTest {
         TrackedOverlay overlay = new TrackedOverlay(
                 7,
                 new Rect(5, 8, 14, 9),
+                126.4,
                 new Point(12, 12),
                 TrackVisualState.MISSED,
                 3,
                 true,
                 List.of());
 
-        assertEquals("ID 7 14x9 px OCC MISS 3", overlay.labelText(true));
+        assertEquals("ID 7 A=126 px^2 OCC MISS 3", overlay.labelText(true));
     }
 }

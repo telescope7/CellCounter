@@ -34,9 +34,9 @@ public class TrackMetricsCalculatorTest {
                 0.5,
                 2,
                 List.of(
-                        new TrackedCellHistoryEntry(2, 0, 0, 2, 2),
-                        new TrackedCellHistoryEntry(3, 3, 0, 5, 2),
-                        new TrackedCellHistoryEntry(4, 3, 4, 5, 6)));
+                        new TrackedCellHistoryEntry(2, 0, 0, 2, 2, 12.0),
+                        new TrackedCellHistoryEntry(3, 3, 0, 5, 2, 14.0),
+                        new TrackedCellHistoryEntry(4, 3, 4, 5, 6, 16.0)));
 
         TrackMetrics metrics = calculator.calculate(trackedCell, 2.0);
 

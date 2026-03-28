@@ -5,7 +5,8 @@ public record TrackedCellHistoryEntry(
         int upperLeftX,
         int upperLeftY,
         int lowerRightX,
-        int lowerRightY) {
+        int lowerRightY,
+        double contourAreaPx) {
 
     public double centroidX() {
         return (upperLeftX + lowerRightX) / 2.0;

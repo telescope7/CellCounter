@@ -30,7 +30,8 @@ public class AnalysisExportService {
             pw.println(
                     "CellType,Substrate,FlowCondition,CellID,FirstSeenFrame,FirstSeenTime(s),CrossingFrame,CrossingTime(s),"
                             + "TotalDistance,DistanceToCross,DistanceAfterCross,"
-                            + "AvgFrameDistance,MedianFrameDistance,FramesTracked,FramesMissed,Speed(pixels/sec)");
+                            + "AvgFrameDistance,MedianFrameDistance,FramesTracked,FramesMissed,Speed(pixels/sec),"
+                            + "MeanContourArea(px^2),MedianContourArea(px^2),LastContourArea(px^2)");
 
             for (TrackedCell trackedCell : trackedCells) {
                 if (!trackedCell.hasHistory()) {
@@ -43,7 +44,7 @@ public class AnalysisExportService {
                 int crossFrame = -1;
                 double crossTime = -1.0;
 
-                pw.printf("%s,%s,%s,%d,%d,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f%n",
+                pw.printf("%s,%s,%s,%d,%d,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f,%.2f%n",
                         safeMetadata.getCellType(),
                         safeMetadata.getSubstrate(),
                         safeMetadata.getFlowCondition(),
@@ -59,7 +60,10 @@ public class AnalysisExportService {
                         metrics.medianFrameDistance(),
                         metrics.framesTracked(),
                         metrics.framesMissed(),
-                        metrics.speed());
+                        metrics.speed(),
+                        trackedCell.meanContourAreaPx(),
+                        trackedCell.medianContourAreaPx(),
+                        trackedCell.lastContourAreaPx());
             }
         }
     }
@@ -68,10 +72,10 @@ public class AnalysisExportService {
         List<TrackedCell> trackedCells = trackingAdapter.getTrackedCells();
         ExportMetadata safeMetadata = metadata == null ? ExportMetadata.EMPTY : metadata;
         try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
-            pw.println("CellType,Substrate,FlowCondition,CellID,Frame,UL_X,UL_Y,LR_X,LR_Y");
+            pw.println("CellType,Substrate,FlowCondition,CellID,Frame,UL_X,UL_Y,LR_X,LR_Y,ContourArea(px^2)");
             for (TrackedCell trackedCell : trackedCells) {
                 for (TrackedCellHistoryEntry item : trackedCell.history()) {
-                    pw.printf("%s,%s,%s,%d,%d,%d,%d,%d,%d%n",
+                    pw.printf("%s,%s,%s,%d,%d,%d,%d,%d,%d,%.2f%n",
                             safeMetadata.getCellType(),
                             safeMetadata.getSubstrate(),
                             safeMetadata.getFlowCondition(),
@@ -80,7 +84,8 @@ public class AnalysisExportService {
                             item.upperLeftX(),
                             item.upperLeftY(),
                             item.lowerRightX(),
-                            item.lowerRightY());
+                            item.lowerRightY(),
+                            item.contourAreaPx());
                 }
             }
         }

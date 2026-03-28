@@ -47,8 +47,7 @@ public class CellCounterApplicationServiceTest {
         try (TuningPreviewFrames frames = service.previewCurrentFramePairForTuning(TrackingConfiguration.defaults())) {
             assertNull(frames.rawFrame());
             assertNull(frames.foregroundFrame());
-            assertEquals(1, adapter.rawPreviewCallCount);
-            assertEquals(1, adapter.foregroundPreviewCallCount);
+            assertEquals(1, adapter.previewPairCallCount);
         }
     }
 
@@ -66,10 +65,7 @@ public class CellCounterApplicationServiceTest {
     private static final class StubTrackingAdapter implements TrackingAdapter {
         private TrackingConfiguration trackingConfiguration = TrackingConfiguration.defaults();
         private boolean mirrorTrackingInRawEnabled = false;
-        private Mat rawPreview;
-        private Mat foregroundPreview;
-        private int rawPreviewCallCount = 0;
-        private int foregroundPreviewCallCount = 0;
+        private int previewPairCallCount = 0;
 
         @Override
         public boolean initializeVideo(String videoPath) {
@@ -169,15 +165,9 @@ public class CellCounterApplicationServiceTest {
         }
 
         @Override
-        public Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
-            rawPreviewCallCount++;
-            return rawPreview;
-        }
-
-        @Override
-        public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
-            foregroundPreviewCallCount++;
-            return foregroundPreview;
+        public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
+            previewPairCallCount++;
+            return new TuningPreviewFrames(null, null);
         }
 
         @Override

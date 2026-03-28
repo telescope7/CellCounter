@@ -1,11 +1,13 @@
 package com.prolymphname.cellcounter;
 
 import com.prolymphname.cellcounter.analysis.DetectionFrameResult;
+import com.prolymphname.cellcounter.analysis.DetectionCandidate;
 import com.prolymphname.cellcounter.analysis.DisplayFrameRenderer;
 import com.prolymphname.cellcounter.analysis.ForegroundDetectionPipeline;
 import com.prolymphname.cellcounter.analysis.TrackOverlayVisualPolicy;
 import com.prolymphname.cellcounter.analysis.TrackVisualState;
 import com.prolymphname.cellcounter.analysis.TrackedOverlay;
+import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import com.prolymphname.cellcounter.trackingadapter.AssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.GreedyAssignmentStrategy;
 import com.prolymphname.cellcounter.trackingadapter.HungarianAssignmentStrategy;
@@ -52,11 +54,13 @@ public class AnalysisLogic {
 		public int frame;
 		public Point UL;
 		public Point LR;
+		public double contourAreaPx;
 
-		public HistoryItem(int frame, Point UL, Point LR) {
+		public HistoryItem(int frame, Point UL, Point LR, double contourAreaPx) {
 			this.frame = frame;
 			this.UL = UL;
 			this.LR = LR;
+			this.contourAreaPx = contourAreaPx;
 		}
 	}
 
@@ -70,6 +74,7 @@ public class AnalysisLogic {
 		public double instantSpeed = 0.0;
 		public Point previousCentroidForSpeed = null;
 		public boolean isNewTrack = true; // For coloring bounding box
+		public double contourAreaPx = 0.0;
 	}
 
 	public static class CentroidTracker {
@@ -98,7 +103,7 @@ public class AnalysisLogic {
 			this.outer = outer;
 		}
 
-		public void register(Point centroid, Rect bbox, double currentTime, int frameNumber) {
+		public void register(Point centroid, Rect bbox, double contourAreaPx, double currentTime, int frameNumber) {
 			Track track = new Track();
 			track.centroid = centroid;
 			track.bbox = bbox;
@@ -107,11 +112,13 @@ public class AnalysisLogic {
 			track.isNewTrack = true;
 			track.previousCentroidForSpeed = new Point(centroid.x, centroid.y); // Initialize for speed calc
 			track.instantSpeed = 0.0;
+			track.contourAreaPx = contourAreaPx;
 
 			outer.trackStartTimes.add(currentTime); // Add start time to the main list
 
 			track.history.add(new HistoryItem(frameNumber, new Point(bbox.x, bbox.y),
-					new Point(bbox.x + bbox.width, bbox.y + bbox.height)));
+					new Point(bbox.x + bbox.width, bbox.y + bbox.height),
+					contourAreaPx));
 			track.missed = 0;
 
 			objects.put(nextObjectID, track);
@@ -130,9 +137,9 @@ public class AnalysisLogic {
 			disappeared.remove(objectID);
 		}
 
-		public void update(List<Rect> rects, double currentTime, int frameNumber, double currentFps) {
+		public void update(List<DetectionCandidate> detections, double currentTime, int frameNumber, double currentFps) {
 			// If no detections, increment disappeared count for all tracks
-			if (rects.isEmpty()) {
+			if (detections.isEmpty()) {
 				List<Integer> objectIDsList = new ArrayList<>(objects.keySet());
 				for (Integer objectID : objectIDsList) {
 					Track track = objects.get(objectID);
@@ -147,14 +154,15 @@ public class AnalysisLogic {
 			}
 
 			List<Point> inputCentroids = new ArrayList<>();
-			for (Rect r : rects) {
-				inputCentroids.add(new Point(r.x + r.width / 2.0, r.y + r.height / 2.0));
+			for (DetectionCandidate detection : detections) {
+				inputCentroids.add(detection.centroid());
 			}
 
 			// If no current tracks, register all new detections
 			if (objects.isEmpty()) {
 				for (int i = 0; i < inputCentroids.size(); i++) {
-					register(inputCentroids.get(i), rects.get(i), currentTime, frameNumber);
+					DetectionCandidate detection = detections.get(i);
+					register(inputCentroids.get(i), detection.bbox(), detection.contourAreaPx(), currentTime, frameNumber);
 				}
 				return;
 			}
@@ -214,9 +222,12 @@ public class AnalysisLogic {
 					}
 					track.previousCentroidForSpeed = new Point(newCentroid.x, newCentroid.y);
 					track.centroid = newCentroid;
-					track.bbox = rects.get(bestDetectionIdx);
+					DetectionCandidate matchedDetection = detections.get(bestDetectionIdx);
+					track.bbox = matchedDetection.bbox();
+					track.contourAreaPx = matchedDetection.contourAreaPx();
 					track.history.add(new HistoryItem(frameNumber, new Point(track.bbox.x, track.bbox.y),
-							new Point(track.bbox.x + track.bbox.width, track.bbox.y + track.bbox.height)));
+							new Point(track.bbox.x + track.bbox.width, track.bbox.y + track.bbox.height),
+							track.contourAreaPx));
 					track.missed = 0;
 					disappeared.put(objectID, 0);
 
@@ -241,7 +252,8 @@ public class AnalysisLogic {
 			// Register new tracks from unmatched detections
 			for (int j = 0; j < inputCentroids.size(); j++) {
 				if (!usedDetectionIndices.contains(j)) {
-					register(inputCentroids.get(j), rects.get(j), currentTime, frameNumber);
+					DetectionCandidate detection = detections.get(j);
+					register(inputCentroids.get(j), detection.bbox(), detection.contourAreaPx(), currentTime, frameNumber);
 				}
 			}
 		}
@@ -576,7 +588,7 @@ public class AnalysisLogic {
 
 			double currentTime = (double) this.frameNumber / this.fps;
 			if (cellTracker != null) {
-				cellTracker.update(detection.rects(), currentTime, this.frameNumber, this.fps);
+				cellTracker.update(detection.detections(), currentTime, this.frameNumber, this.fps);
 			}
 
 			recordObservedInstantSpeeds();
@@ -599,17 +611,9 @@ public class AnalysisLogic {
 		}
 	}
 
-	public Mat previewRawCurrentFrameForTuning(TrackingConfiguration previewConfiguration) {
-		return previewDisplayFrameForTuning(previewConfiguration, false);
-	}
-
-	public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration previewConfiguration) {
-		return previewDisplayFrameForTuning(previewConfiguration, true);
-	}
-
-	private Mat previewDisplayFrameForTuning(TrackingConfiguration previewConfiguration, boolean renderForegroundMask) {
+	public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration previewConfiguration) {
 		if (!videoSuccessfullyInitialized || videoFilename == null || videoFilename.isBlank()) {
-			return null;
+			return new TuningPreviewFrames(null, null);
 		}
 
 		TrackingConfiguration cfg = (previewConfiguration == null ? trackingConfiguration : previewConfiguration).normalized();
@@ -620,7 +624,7 @@ public class AnalysisLogic {
 		VideoCapture previewCap = new VideoCapture(videoFilename);
 		if (!previewCap.isOpened()) {
 			previewCap.release();
-			return null;
+			return new TuningPreviewFrames(null, null);
 		}
 
 		BackgroundSubtractorMOG2 previewSubtractor = Video.createBackgroundSubtractorMOG2(
@@ -629,7 +633,8 @@ public class AnalysisLogic {
 				cfg.isMog2DetectShadows());
 
 		Mat frame = new Mat();
-		Mat previewDisplay = null;
+		Mat rawPreview = null;
+		Mat foregroundPreview = null;
 
 		try {
 			if (startFrameIndex > 0) {
@@ -648,36 +653,39 @@ public class AnalysisLogic {
 						referenceFrame,
 						previewSubtractor,
 						cfg)) {
-						if (frameIndex == targetFrameIndex) {
-							previewDisplay = renderForegroundMask
-									? displayFrameRenderer.renderForegroundPreviewFrame(detection.mask(), detection.rects())
-									: displayFrameRenderer.renderRawPreviewFrame(frame, detection.rects());
-						}
-					}
-					frameIndex++;
-			}
-
-				if (previewDisplay == null && currentRawFrameForDisplay != null && !currentRawFrameForDisplay.empty()) {
-					try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
-							currentRawFrameForDisplay,
-							referenceFrame,
-							previewSubtractor,
-							cfg)) {
-						previewDisplay = renderForegroundMask
-								? displayFrameRenderer.renderForegroundPreviewFrame(
-										detection.mask(),
-										detection.rects())
-								: displayFrameRenderer.renderRawPreviewFrame(
-										currentRawFrameForDisplay,
-										detection.rects());
+					if (frameIndex == targetFrameIndex) {
+						rawPreview = displayFrameRenderer.renderRawPreviewFrame(frame, detection.rects());
+						foregroundPreview = displayFrameRenderer.renderForegroundPreviewFrame(detection.mask(), detection.rects());
 					}
 				}
-			} finally {
+				frameIndex++;
+			}
+
+			if ((rawPreview == null || foregroundPreview == null)
+					&& currentRawFrameForDisplay != null && !currentRawFrameForDisplay.empty()) {
+				try (DetectionFrameResult detection = foregroundDetectionPipeline.detect(
+						currentRawFrameForDisplay,
+						referenceFrame,
+						previewSubtractor,
+						cfg)) {
+					rawPreview = displayFrameRenderer.renderRawPreviewFrame(currentRawFrameForDisplay, detection.rects());
+					foregroundPreview = displayFrameRenderer.renderForegroundPreviewFrame(detection.mask(), detection.rects());
+				}
+			}
+
+			return new TuningPreviewFrames(rawPreview, foregroundPreview);
+		} catch (RuntimeException ex) {
+			if (rawPreview != null) {
+				rawPreview.release();
+			}
+			if (foregroundPreview != null) {
+				foregroundPreview.release();
+			}
+			throw ex;
+		} finally {
 			frame.release();
 			previewCap.release();
 		}
-
-		return previewDisplay;
 	}
 
 	public void setMirrorTrackingInRawEnabled(boolean show) {
@@ -754,6 +762,7 @@ public class AnalysisLogic {
 			overlays.add(new TrackedOverlay(
 					entry.getKey(),
 					track.bbox,
+					track.contourAreaPx,
 					track.centroid,
 					state,
 					track.missed,
@@ -917,7 +926,8 @@ public class AnalysisLogic {
 					(int) item.UL.x,
 					(int) item.UL.y,
 					(int) item.LR.x,
-					(int) item.LR.y));
+					(int) item.LR.y,
+					item.contourAreaPx));
 		}
 		return new TrackedCell(cellId, track.startFrame, track.startTime, track.missed, historyEntries);
 	}

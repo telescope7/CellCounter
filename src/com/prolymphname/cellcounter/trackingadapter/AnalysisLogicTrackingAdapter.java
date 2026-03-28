@@ -1,6 +1,7 @@
 package com.prolymphname.cellcounter.trackingadapter;
 
 import com.prolymphname.cellcounter.AnalysisLogic;
+import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.opencv.core.Mat;
 
 import java.util.List;
@@ -117,13 +118,8 @@ public class AnalysisLogicTrackingAdapter implements TrackingAdapter {
     }
 
     @Override
-    public Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
-        return analysisLogic.previewRawCurrentFrameForTuning(trackingConfiguration);
-    }
-
-    @Override
-    public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
-        return analysisLogic.previewForegroundCurrentFrameForTuning(trackingConfiguration);
+    public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
+        return analysisLogic.previewCurrentFramePairForTuning(trackingConfiguration);
     }
 
     @Override

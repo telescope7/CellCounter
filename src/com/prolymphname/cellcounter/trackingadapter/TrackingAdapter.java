@@ -1,5 +1,6 @@
 package com.prolymphname.cellcounter.trackingadapter;
 
+import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.opencv.core.Mat;
 
 import java.util.List;
@@ -45,9 +46,7 @@ public interface TrackingAdapter {
 
     void setTrackingConfiguration(TrackingConfiguration trackingConfiguration);
 
-    Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration);
-
-    Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration);
+    TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration);
 
     List<TrackedCell> getTrackedCells();
 }

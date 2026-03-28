@@ -9,6 +9,7 @@ import java.util.List;
 public record TrackedOverlay(
         int cellId,
         Rect bbox,
+        double contourAreaPx,
         Point centroid,
         TrackVisualState state,
         int missedFrames,
@@ -27,10 +28,14 @@ public record TrackedOverlay(
         return labelText(false);
     }
 
-    public String labelText(boolean includeBoundingSize) {
+    public String labelText(boolean includeSizeMetrics) {
         List<String> tags = new ArrayList<>();
-        if (includeBoundingSize && bbox != null && bbox.width > 0 && bbox.height > 0) {
-            tags.add(bbox.width + "x" + bbox.height + " px");
+        if (includeSizeMetrics) {
+            if (contourAreaPx > 0.0) {
+                tags.add("A=" + Math.round(contourAreaPx) + " px^2");
+            } else if (bbox != null && bbox.width > 0 && bbox.height > 0) {
+                tags.add(bbox.width + "x" + bbox.height + " px");
+            }
         }
         if (occlusionRisk) {
             tags.add("OCC");

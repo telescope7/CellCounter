@@ -3,11 +3,20 @@ package com.prolymphname.cellcounter.analysis;
 import org.opencv.core.Mat;
 import org.opencv.core.Rect;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public record DetectionFrameResult(Mat mask, List<Rect> rects) implements AutoCloseable {
+public record DetectionFrameResult(Mat mask, List<DetectionCandidate> detections) implements AutoCloseable {
     public DetectionFrameResult {
-        rects = List.copyOf(rects);
+        detections = List.copyOf(detections);
+    }
+
+    public List<Rect> rects() {
+        List<Rect> rects = new ArrayList<>(detections.size());
+        for (DetectionCandidate detection : detections) {
+            rects.add(detection.bbox());
+        }
+        return List.copyOf(rects);
     }
 
     @Override

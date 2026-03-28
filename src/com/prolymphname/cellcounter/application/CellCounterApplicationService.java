@@ -106,20 +106,7 @@ public class CellCounterApplicationService {
     }
 
     public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
-        Mat rawPreview = trackingAdapter.previewRawCurrentFrameForTuning(trackingConfiguration);
-        Mat foregroundPreview = null;
-        try {
-            foregroundPreview = trackingAdapter.previewForegroundCurrentFrameForTuning(trackingConfiguration);
-            return new TuningPreviewFrames(rawPreview, foregroundPreview);
-        } catch (RuntimeException ex) {
-            if (rawPreview != null) {
-                rawPreview.release();
-            }
-            if (foregroundPreview != null) {
-                foregroundPreview.release();
-            }
-            throw ex;
-        }
+        return trackingAdapter.previewCurrentFramePairForTuning(trackingConfiguration);
     }
 
     public void saveAnalysisCsv(File file, ExportMetadata metadata) throws IOException {

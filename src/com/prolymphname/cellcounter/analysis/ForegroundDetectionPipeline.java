@@ -60,17 +60,18 @@ public class ForegroundDetectionPipeline {
         Core.normalize(fgmask, fgmask, 0, 255, Core.NORM_MINMAX);
         Imgproc.threshold(fgmask, fgmask, cfg.getNormalizedMaskThreshold(), 255, Imgproc.THRESH_BINARY);
 
-        List<Rect> rects = new ArrayList<>();
+        List<DetectionCandidate> detections = new ArrayList<>();
         for (MatOfPoint contour : contours) {
             try {
-                if (Imgproc.contourArea(contour) < cfg.getMinContourArea()) {
+                double contourArea = Imgproc.contourArea(contour);
+                if (contourArea < cfg.getMinContourArea()) {
                     continue;
                 }
 
                 Rect rect = Imgproc.boundingRect(contour);
                 double circumference = 2.0 * (rect.width + rect.height);
                 if (circumference <= cfg.getMaxRectCircumference()) {
-                    rects.add(rect);
+                    detections.add(new DetectionCandidate(rect, contourArea));
                 }
             } finally {
                 contour.release();
@@ -78,6 +79,6 @@ public class ForegroundDetectionPipeline {
         }
         contours.clear();
 
-        return new DetectionFrameResult(fgmask, rects);
+        return new DetectionFrameResult(fgmask, detections);
     }
 }

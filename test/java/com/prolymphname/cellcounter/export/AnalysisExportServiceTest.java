@@ -4,6 +4,7 @@ import com.prolymphname.cellcounter.trackingadapter.TrackedCell;
 import com.prolymphname.cellcounter.trackingadapter.TrackedCellHistoryEntry;
 import com.prolymphname.cellcounter.trackingadapter.TrackingAdapter;
 import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
+import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
 import org.junit.Test;
 import org.opencv.core.Mat;
 
@@ -31,7 +32,7 @@ public class AnalysisExportServiceTest {
         assertEquals(2, lines.size());
         assertTrue(lines.get(0).startsWith("CellType,Substrate,FlowCondition"));
         assertTrue(lines.get(1).contains("Cells,Glass,LowFlow,101,2,0.50,-1,-1.00,7.00"));
-        assertTrue(lines.get(1).endsWith(",3,1,4.67"));
+        assertTrue(lines.get(1).endsWith(",3,1,4.67,14.00,14.00,16.00"));
     }
 
     @Test
@@ -46,10 +47,10 @@ public class AnalysisExportServiceTest {
 
         List<String> lines = Files.readAllLines(output.toPath());
         assertEquals(4, lines.size());
-        assertEquals("CellType,Substrate,FlowCondition,CellID,Frame,UL_X,UL_Y,LR_X,LR_Y", lines.get(0));
-        assertEquals(",,,101,2,0,0,2,2", lines.get(1));
-        assertEquals(",,,101,3,3,0,5,2", lines.get(2));
-        assertEquals(",,,101,4,3,4,5,6", lines.get(3));
+        assertEquals("CellType,Substrate,FlowCondition,CellID,Frame,UL_X,UL_Y,LR_X,LR_Y,ContourArea(px^2)", lines.get(0));
+        assertEquals(",,,101,2,0,0,2,2,12.00", lines.get(1));
+        assertEquals(",,,101,3,3,0,5,2,14.00", lines.get(2));
+        assertEquals(",,,101,4,3,4,5,6,16.00", lines.get(3));
     }
 
     private List<TrackedCell> sampleTrackedCells() {
@@ -59,9 +60,9 @@ public class AnalysisExportServiceTest {
                 0.5,
                 1,
                 List.of(
-                        new TrackedCellHistoryEntry(2, 0, 0, 2, 2),
-                        new TrackedCellHistoryEntry(3, 3, 0, 5, 2),
-                        new TrackedCellHistoryEntry(4, 3, 4, 5, 6))));
+                        new TrackedCellHistoryEntry(2, 0, 0, 2, 2, 12.0),
+                        new TrackedCellHistoryEntry(3, 3, 0, 5, 2, 14.0),
+                        new TrackedCellHistoryEntry(4, 3, 4, 5, 6, 16.0))));
     }
 
     private static class StubTrackingAdapter implements TrackingAdapter {
@@ -174,12 +175,7 @@ public class AnalysisExportServiceTest {
         }
 
         @Override
-        public Mat previewRawCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
-            throw unsupported();
-        }
-
-        @Override
-        public Mat previewForegroundCurrentFrameForTuning(TrackingConfiguration trackingConfiguration) {
+        public TuningPreviewFrames previewCurrentFramePairForTuning(TrackingConfiguration trackingConfiguration) {
             throw unsupported();
         }
 
