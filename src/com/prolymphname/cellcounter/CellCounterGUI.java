@@ -7,8 +7,8 @@ import com.prolymphname.cellcounter.trackingadapter.TrackingConfiguration;
 import com.prolymphname.cellcounter.ui.AppIcon;
 import com.prolymphname.cellcounter.ui.CardPanel;
 import com.prolymphname.cellcounter.ui.ChartRefreshController;
-import com.prolymphname.cellcounter.ui.DetectionTunerDialog;
 import com.prolymphname.cellcounter.ui.GradientPanel;
+import com.prolymphname.cellcounter.ui.InlineSettingsPanel;
 import com.prolymphname.cellcounter.ui.ReadOnlySlider;
 import com.prolymphname.cellcounter.ui.StartupSplashWindow;
 import com.prolymphname.cellcounter.ui.TuningPreviewFrames;
@@ -111,6 +111,7 @@ public class CellCounterGUI extends JFrame {
     private JButton tuneDetectionButton;
     private JLabel helpButton;
     private JCheckBox mirrorTrackingCheckBox;
+    private InlineSettingsPanel settingsPanel;
     private JSlider playbackRateSlider;
     private JSlider videoPositionSlider;
     private JLabel videoPositionValueLabel;
@@ -264,6 +265,8 @@ public class CellCounterGUI extends JFrame {
         topRow.setOpaque(false);
         JPanel secondRow = new JPanel(new FlowLayout(FlowLayout.LEFT, SPACE_XS, 0));
         secondRow.setOpaque(false);
+        topRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        secondRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         analyzeButton = createPrimaryButton("Open Video", new AppIcon(AppIcon.Kind.SEARCH, Color.WHITE));
         fastButton = createSecondaryButton("Fast Analyze", new AppIcon(AppIcon.Kind.BOLT, Color.WHITE));
@@ -304,7 +307,7 @@ public class CellCounterGUI extends JFrame {
 
         tuneDetectionButton = createSecondaryButton("Settings", new AppIcon(AppIcon.Kind.SLIDERS, Color.WHITE));
         tuneDetectionButton.setFont(FONT_LABEL);
-        tuneDetectionButton.setToolTipText("Settings (T)");
+        tuneDetectionButton.setToolTipText("Show or hide compact settings (T)");
 
         mirrorTrackingCheckBox = new JCheckBox("Mirror Tracking");
         mirrorTrackingCheckBox.setSelected(appService.isMirrorTrackingInRawEnabled());
@@ -334,9 +337,34 @@ public class CellCounterGUI extends JFrame {
         secondRow.add(tuneDetectionButton);
         secondRow.add(mirrorTrackingCheckBox);
 
+        settingsPanel = new InlineSettingsPanel(
+                appService,
+                previewFrames -> {
+                    if (previewFrames == null) {
+                        return;
+                    }
+                    try (TuningPreviewFrames frames = previewFrames) {
+                        showPreviewFrames(frames.rawFrame(), frames.foregroundFrame());
+                    }
+                },
+                updated -> {
+                    appService.setTrackingConfiguration(updated);
+                    refreshCurrentVideoFrame();
+                    refreshChartsNow();
+                    paused = true;
+                    videoPlaying = false;
+                    videoTimer.stop();
+                    setPlayButtonPlaying(false);
+                    refreshPipelineStateForCurrentContext();
+                },
+                this::handleInlineSettingsClosed);
+        settingsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         content.add(topRow);
         content.add(Box.createVerticalStrut(SPACE_XS));
         content.add(secondRow);
+        content.add(Box.createVerticalStrut(SPACE_XS));
+        content.add(settingsPanel);
         controlsCard.add(content, BorderLayout.CENTER);
         return controlsCard;
     }
@@ -605,9 +633,14 @@ public class CellCounterGUI extends JFrame {
     private void handleTuneDetection() {
         if (!appService.isVideoSuccessfullyInitialized()) {
             JOptionPane.showMessageDialog(this,
-                    "Load a video first. The tuner previews segmentation on the current paused frame.",
+                    "Load a video first. Settings previews segmentation on the current paused frame.",
                     "No Video",
                     JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (settingsPanel != null && settingsPanel.isPanelVisible()) {
+            settingsPanel.hidePanel();
             return;
         }
 
@@ -618,7 +651,12 @@ public class CellCounterGUI extends JFrame {
             setPlayButtonPlaying(false);
             setPipelineState("Paused", CHIP_WARNING);
         }
-        openDetectionTunerDialog();
+        if (settingsPanel != null) {
+            settingsPanel.showPanel(appService.getTrackingConfiguration());
+            revalidate();
+            repaint();
+            setPipelineState("Settings", CHIP_WARNING);
+        }
     }
 
     private void handleSpaceStepPressed() {
@@ -671,33 +709,6 @@ public class CellCounterGUI extends JFrame {
         if (stepKeyRepeatTimer != null) {
             stepKeyRepeatTimer.stop();
         }
-    }
-
-    private void openDetectionTunerDialog() {
-        new DetectionTunerDialog(
-                this,
-                appService,
-                appService.getTrackingConfiguration(),
-                previewFrames -> {
-                    if (previewFrames == null) {
-                        return;
-                    }
-                    try (TuningPreviewFrames frames = previewFrames) {
-                        showPreviewFrames(frames.rawFrame(), frames.foregroundFrame());
-                    }
-                },
-                updated -> {
-                    appService.setTrackingConfiguration(updated);
-                    refreshCurrentVideoFrame();
-                    refreshChartsNow();
-                    paused = true;
-                    videoPlaying = false;
-                    videoTimer.stop();
-                    setPlayButtonPlaying(false);
-                    setPipelineState("Configured", CHIP_ACTIVE);
-                },
-                this::refreshCurrentVideoFrame)
-                .open();
     }
 
     private void refreshCurrentVideoFrame() {
@@ -1286,6 +1297,33 @@ public class CellCounterGUI extends JFrame {
         }
     }
 
+    private void handleInlineSettingsClosed() {
+        refreshCurrentVideoFrame();
+        refreshPipelineStateForCurrentContext();
+        revalidate();
+        repaint();
+    }
+
+    private void refreshPipelineStateForCurrentContext() {
+        if (!appService.isVideoSuccessfullyInitialized()) {
+            setPipelineState("Waiting for file", CHIP_IDLE);
+            return;
+        }
+        if (videoPlaying && !paused) {
+            setPipelineState("Playing", CHIP_PLAYING);
+            return;
+        }
+        if (!appService.isCaptureActive()) {
+            setPipelineState("Complete", CHIP_ACTIVE);
+            return;
+        }
+        if (paused) {
+            setPipelineState("Paused", CHIP_WARNING);
+            return;
+        }
+        setPipelineState("Ready", CHIP_ACTIVE);
+    }
+
     private void openHelpDocumentation() {
         Path helpPath = resolveHelpDocumentationPath();
         if (helpPath == null) {
@@ -1452,6 +1490,9 @@ public class CellCounterGUI extends JFrame {
         }
         if (videoPositionSlider != null) {
             videoPositionSlider.setEnabled(enabled);
+        }
+        if (settingsPanel != null) {
+            settingsPanel.setInteractiveEnabled(enabled);
         }
     }
 
