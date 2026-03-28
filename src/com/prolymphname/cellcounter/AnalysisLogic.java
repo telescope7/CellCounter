@@ -589,8 +589,9 @@ public class AnalysisLogic {
 					detection.mask(),
 					mirrorTrackingInRaw,
 					mirrorTrackingInRaw,
+					mirrorTrackingInRaw,
 					mirrorTrackingInRaw);
-			Mat foregroundDisplayImage = renderDisplayFromCurrentState(frameInput, true, detection.mask(), true, true, true);
+			Mat foregroundDisplayImage = renderDisplayFromCurrentState(frameInput, true, detection.mask(), true, true, true, false);
 			if (this.lastForegroundDisplayFrame != null) {
 				this.lastForegroundDisplayFrame.release();
 			}
@@ -718,7 +719,8 @@ public class AnalysisLogic {
 			Mat precomputedMask,
 			boolean showTrackingOverlay,
 			boolean showTrackTrails,
-			boolean showMatchRegion) {
+			boolean showMatchRegion,
+			boolean includeBoundingSizeInLabels) {
 		Mat maskForDisplay = precomputedMask;
 		boolean releaseMaskForDisplay = false;
 		if (maskForDisplay == null || maskForDisplay.empty()) {
@@ -733,6 +735,7 @@ public class AnalysisLogic {
 						showTrackingOverlay ? buildTrackedOverlays() : List.of(),
 						showTrackTrails,
 						showMatchRegion,
+						includeBoundingSizeInLabels,
 						trackingConfiguration.getMinHorizontalMovementPixels(),
 						trackingConfiguration.getMaxVerticalDisplacementPixels(),
 						trackingConfiguration.getMaxAssociationDistancePixels());
@@ -835,6 +838,7 @@ public class AnalysisLogic {
 					this.lastForegroundMaskForDisplay,
 					mirrorTrackingInRaw,
 					mirrorTrackingInRaw,
+					mirrorTrackingInRaw,
 					mirrorTrackingInRaw);
 			Mat newForegroundDisplayFrame = renderDisplayFromCurrentState(
 					rotatedFrame,
@@ -842,7 +846,8 @@ public class AnalysisLogic {
 					this.lastForegroundMaskForDisplay,
 					true,
 					true,
-					true);
+					true,
+					false);
 			if (this.lastProcessedFrame != null) {
 				this.lastProcessedFrame.release();
 			}

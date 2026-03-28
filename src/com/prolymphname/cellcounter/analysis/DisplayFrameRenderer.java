@@ -31,6 +31,7 @@ public class DisplayFrameRenderer {
             List<TrackedOverlay> overlays,
             boolean showTrackTrails,
             boolean showMatchRegion,
+            boolean includeBoundingSizeInLabels,
             double minHorizontalMovementPixels,
             double maxVerticalDisplacementPixels,
             double maxAssociationDistancePixels) {
@@ -86,7 +87,7 @@ public class DisplayFrameRenderer {
                     }
                 }
                 if (centroid != null) {
-                    drawTrackLabel(displayOutput, overlay, color);
+                    drawTrackLabel(displayOutput, overlay, color, includeBoundingSizeInLabels);
                     Imgproc.circle(displayOutput, centroid, 4, color, 1);
                     if (overlay.occlusionRisk()) {
                         Imgproc.circle(displayOutput, centroid, 10, OCCLUSION_RISK_COLOR, 2, Imgproc.LINE_AA, 0);
@@ -191,9 +192,9 @@ public class DisplayFrameRenderer {
                 start.y + ((end.y - start.y) * ratio));
     }
 
-    private void drawTrackLabel(Mat displayOutput, TrackedOverlay overlay, Scalar color) {
+    private void drawTrackLabel(Mat displayOutput, TrackedOverlay overlay, Scalar color, boolean includeBoundingSizeInLabels) {
         Point centroid = overlay.centroid();
-        String label = overlay.labelText();
+        String label = overlay.labelText(includeBoundingSizeInLabels);
         int[] baseline = new int[1];
         org.opencv.core.Size labelSize = Imgproc.getTextSize(
                 label,

@@ -24,7 +24,14 @@ public record TrackedOverlay(
     }
 
     public String labelText() {
+        return labelText(false);
+    }
+
+    public String labelText(boolean includeBoundingSize) {
         List<String> tags = new ArrayList<>();
+        if (includeBoundingSize && bbox != null && bbox.width > 0 && bbox.height > 0) {
+            tags.add(bbox.width + "x" + bbox.height + " px");
+        }
         if (occlusionRisk) {
             tags.add("OCC");
         }
