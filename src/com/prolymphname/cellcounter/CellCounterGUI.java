@@ -32,6 +32,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -272,10 +273,10 @@ public class CellCounterGUI extends JFrame {
         saveResultsButton = createPrimaryButton("Save Results", new AppIcon(AppIcon.Kind.FILE, Color.WHITE));
         analyzeButton.setToolTipText("Open Video (O)");
         fastButton.setToolTipText("Fast Analyze (F)");
-        playButton.setToolTipText("Play / Pause (P or K, Esc to pause)");
+        playButton.setToolTipText("Play / Pause (P, Esc to pause)");
         playButton.setHorizontalTextPosition(SwingConstants.LEFT);
         playButton.setIconTextGap(SPACE_XS);
-        configureIconOnlyButton(frameForwardButton, "Step (hold Space, . or Right Arrow)");
+        configureIconOnlyButton(frameForwardButton, "Next Frame (N, hold Space, . or Right Arrow)");
         configureIconOnlyButton(resetButton, "Replay (R)");
         saveResultsButton.setToolTipText("Save Results (S)");
 
@@ -576,24 +577,17 @@ public class CellCounterGUI extends JFrame {
                 "step-single-period", singleStepAction);
         registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true),
                 "step-single-right", singleStepAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_P, 0, true),
-                "toggle-play-p", togglePlayPauseAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_K, 0, true),
-                "toggle-play-k", togglePlayPauseAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_N, "step-single-n", singleStepAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_P, "toggle-play-p", togglePlayPauseAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_K, "toggle-play-k", togglePlayPauseAction);
         registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0, true),
                 "pause-only", pauseOnlyAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_O, 0, true),
-                "open-video", openVideoAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_F, 0, true),
-                "fast-analyze", fastAnalyzeAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_R, 0, true),
-                "reset-video", resetAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_S, 0, true),
-                "save-results", saveResultsAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_T, 0, true),
-                "tune-detection", tuneDetectionAction);
-        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(KeyEvent.VK_H, 0, true),
-                "open-help", helpAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_O, "open-video", openVideoAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_F, "fast-analyze", fastAnalyzeAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_R, "reset-video", resetAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_S, "save-results", saveResultsAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_T, "tune-detection", tuneDetectionAction);
+        registerLetterShortcut(inputMap, actionMap, KeyEvent.VK_H, "open-help", helpAction);
     }
 
     private void registerSpaceStepBindings(
@@ -610,6 +604,21 @@ public class CellCounterGUI extends JFrame {
     private void registerWindowShortcut(InputMap inputMap, ActionMap actionMap, KeyStroke keyStroke, String actionKey, Action action) {
         inputMap.put(keyStroke, actionKey);
         actionMap.put(actionKey, action);
+    }
+
+    private void registerLetterShortcut(
+            InputMap inputMap,
+            ActionMap actionMap,
+            int keyCode,
+            String actionKey,
+            Action action) {
+        registerWindowShortcut(inputMap, actionMap, KeyStroke.getKeyStroke(keyCode, 0, true), actionKey, action);
+        registerWindowShortcut(
+                inputMap,
+                actionMap,
+                KeyStroke.getKeyStroke(keyCode, InputEvent.SHIFT_DOWN_MASK, true),
+                actionKey + "-shift",
+                action);
     }
 
     private void setInitialControlState() {
