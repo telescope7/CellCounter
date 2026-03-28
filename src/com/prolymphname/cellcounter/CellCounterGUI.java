@@ -87,8 +87,6 @@ public class CellCounterGUI extends JFrame {
     private static final double DEFAULT_VIDEO_RATE = 1.0;
     private static final int STEP_HOLD_INITIAL_DELAY_MS = 260;
     private static final int STEP_HOLD_REPEAT_DELAY_MS = 90;
-    private static final Color CHIP_CRITICAL = new Color(184, 79, 90);
-
     private final CellCounterApplicationService appService;
     private final ChartRefreshController chartRefreshController = new ChartRefreshController();
 
@@ -115,7 +113,6 @@ public class CellCounterGUI extends JFrame {
     private JLabel helpButton;
     private JCheckBox mirrorTrackingCheckBox;
     private JPanel trackingQualityPanel;
-    private JLabel trackingConfidenceLabel;
     private JLabel trackingActiveLabel;
     private JLabel trackingWatchLabel;
     private InlineSettingsPanel settingsPanel;
@@ -373,20 +370,17 @@ public class CellCounterGUI extends JFrame {
         trackingQualityPanel.setOpaque(false);
         trackingQualityPanel.setBorder(new RoundedBorder(new Color(82, 129, 193, 120), 16));
 
-        JLabel title = new JLabel("Tracking Quality");
+        JLabel title = new JLabel("Tracking Status");
         title.setFont(FONT_LABEL);
         title.setForeground(TEXT_SECONDARY);
 
-        trackingConfidenceLabel = createChipLabel("Confidence 0", CHIP_IDLE);
         trackingActiveLabel = createChipLabel("Active 0", CHIP_IDLE);
         trackingWatchLabel = createChipLabel("Watch 0", CHIP_IDLE);
 
-        trackingConfidenceLabel.setFont(FONT_LABEL);
         trackingActiveLabel.setFont(FONT_LABEL);
         trackingWatchLabel.setFont(FONT_LABEL);
 
         trackingQualityPanel.add(title);
-        trackingQualityPanel.add(trackingConfidenceLabel);
         trackingQualityPanel.add(trackingActiveLabel);
         trackingQualityPanel.add(trackingWatchLabel);
         trackingQualityPanel.setToolTipText(buildTrackingQualityPanelTooltip(TrackingQualitySummary.empty()));
@@ -771,13 +765,9 @@ public class CellCounterGUI extends JFrame {
     }
 
     private void updateTrackingQualityPanel(TrackingQualitySummary summary) {
-        if (trackingConfidenceLabel == null || summary == null) {
+        if (trackingActiveLabel == null || summary == null) {
             return;
         }
-
-        trackingConfidenceLabel.setText("Confidence " + summary.confidencePercent());
-        trackingConfidenceLabel.setBackground(resolveConfidenceChipColor(summary.confidencePercent()));
-        trackingConfidenceLabel.setToolTipText(buildConfidenceTooltip(summary));
 
         trackingActiveLabel.setText("Active " + summary.activeTracks());
         trackingActiveLabel.setBackground(summary.activeTracks() > 0 ? CHIP_ACTIVE : CHIP_IDLE);
@@ -794,29 +784,9 @@ public class CellCounterGUI extends JFrame {
         }
     }
 
-    private Color resolveConfidenceChipColor(int confidencePercent) {
-        if (confidencePercent >= 75) {
-            return CHIP_PLAYING;
-        }
-        if (confidencePercent >= 50) {
-            return CHIP_WARNING;
-        }
-        return CHIP_CRITICAL;
-    }
-
-    private String buildConfidenceTooltip(TrackingQualitySummary summary) {
-        return "<html>Composite confidence score for currently active tracks.<br>"
-                + "It rewards horizontal span across the frame, track maturity, and clean continuity.<br>"
-                + "Longer-lived tracks with larger observed span carry more weight than short/new tracks,<br>"
-                + "while active misses plus occlusion/collision risk reduce the score.<br>"
-                + "High-confidence tracks: " + summary.highConfidenceTracks() + "</html>";
-    }
-
     private String buildTrackingQualityPanelTooltip(TrackingQualitySummary summary) {
-        return "<html>High-level tracking quality summary for the current frame.<br>"
-                + "Confidence: " + summary.confidencePercent() + " / 100<br>"
+        return "<html>Live tracking status summary for the current frame.<br>"
                 + "Active tracks: " + summary.activeTracks() + "<br>"
-                + "High-confidence tracks: " + summary.highConfidenceTracks() + "<br>"
                 + "Watch tracks: " + summary.watchTracks() + "<br>"
                 + "Occlusion risk tracks: " + summary.occlusionRiskTracks() + "</html>";
     }
